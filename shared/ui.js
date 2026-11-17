@@ -249,6 +249,39 @@
     node.classList.remove('pz-fade-in'); void node.offsetWidth; node.classList.add('pz-fade-in');
   }
 
+  /* --- 글자로 쓴 식의 줄바꿈: " = ", " + ", " − ", " < " 등은 기호 뒤 띄어쓰기를 줄바꿈 없는 공백으로 바꿔
+     줄이 바뀔 때 기호가 윗줄 끝이 아니라 다음 줄 첫머리에 오게 한다 (교과서식). 수식(KaTeX)·입력 칸·코드·SVG는 건드리지 않는다 --- */
+  /* 괄호 안이 짧으면(16자 이하) 띄어쓰기를 줄바꿈 없는 공백으로 → "−(8 − 2)", "(x축 위쪽 넓이)"가 갈라지지 않게 */
+  var OP_RE = / ([=+−<>≤≥≠×÷]) /g, PAREN_RE = /\(([^()\n]{1,16})\)/g, OP_TEST = / [=+−<>≤≥≠×÷] |\([^()\n]{1,16}\)/;
+  var OP_SKIP = 'script,style,textarea,pre,code,svg,option,.katex,[contenteditable]';
+  function opFix(t){
+    if (!OP_TEST.test(t.data)) return;
+    var p = t.parentElement; if (!p || p.closest(OP_SKIP)) return;
+    var d = t.data.replace(OP_RE, ' $1 ').replace(PAREN_RE, function(m){ return m.replace(/ /g, ' '); });
+    if (d !== t.data) t.data = d;
+  }
+  /* 수식(KaTeX) 바로 뒤에 붙은 조사(와, 가, 의 …)가 다음 줄로 떨어지지 않게 수식과 한 덩어리로 묶음 */
+  function glueKatex(root){
+    if (!root || root.nodeType !== 1 || !root.querySelectorAll) return;
+    root.querySelectorAll('.katex').forEach(function(k){
+      if (k.closest('.katex-display') || (k.parentElement && k.parentElement.classList.contains('pz-nobr'))) return;
+      var n = k.nextSibling; if (!n || n.nodeType !== 3) return;
+      /* 수식에 바로 붙은 한글, 또는 한 칸 띄고 쓴 조사(예: "\(f\) 와") */
+      var m = /^[가-힣]+/.exec(n.data) || /^ (와|과|가|이|의|는|은|을|를|에서|에|으로|로|도|만)(?=[\s.,)!?]|$)/.exec(n.data); if (!m) return;
+      var w = document.createElement('span'); w.className = 'pz-nobr'; w.style.whiteSpace = 'nowrap';
+      k.parentNode.insertBefore(w, k); w.appendChild(k);
+      n.data = n.data.slice(m[0].length); w.appendChild(document.createTextNode(m[0].replace(' ', ' ')));
+    });
+  }
+  function opBreak(root){
+    if (!root) return;
+    if (root.nodeType === 3){ opFix(root); return; }
+    if (root.nodeType !== 1 || root.closest(OP_SKIP)) return;
+    var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), list = [], n;
+    while ((n = w.nextNode())) if (OP_TEST.test(n.data)) list.push(n);
+    list.forEach(opFix);
+  }
+
   function init(){
     if (document.getElementById('pz-main')) return;
     try { meta = JSON.parse((document.getElementById('pz-meta') || {}).textContent || '{}'); } catch(e){ meta = {}; }
@@ -286,7 +319,11 @@
     document.addEventListener('pointerdown', ripple, true);
     var tabTerms = function(){ document.querySelectorAll('.pz-term:not([tabindex])').forEach(function(t){ t.setAttribute('tabindex', '0'); }); };
     tabTerms();
-    if (window.MutationObserver){ var mo, q = false; mo = new MutationObserver(function(){ if (q) return; q = true; requestAnimationFrame(function(){ q = false; tabTerms(); }); }); mo.observe(document.body, {childList:true, subtree:true}); }
+    opBreak(main); glueKatex(main);
+    if (window.MutationObserver){ var mo, q = false; mo = new MutationObserver(function(recs){
+      recs.forEach(function(r){ if (r.type === 'characterData') opFix(r.target); else { for (var i = 0; i < r.addedNodes.length; i++) opBreak(r.addedNodes[i]); if (r.addedNodes.length) glueKatex(r.target); } });
+      if (q) return; q = true; requestAnimationFrame(function(){ q = false; tabTerms(); }); });
+      mo.observe(document.body, {childList:true, subtree:true, characterData:true}); }
     window.addEventListener('resize', updateAvail);
     updateAvail();
     bump();
