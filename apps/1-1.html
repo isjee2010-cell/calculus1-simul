@@ -105,9 +105,9 @@
   .eqDisplay { font-family: 'JetBrains Mono', var(--pz-mono); font-size: 18px; color: var(--pz-ink); font-weight: 700; overflow-wrap: anywhere; line-height: 1.6; }
   .pw { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
   .pw .brace { font-size: 52px; font-weight: 300; line-height: 1; transform: scaleX(.7); margin-top: -6px; }
-  .pw .cases { display: grid; gap: 2px; }
-  .pw .cases > span { display: grid; grid-template-columns: 5.5em auto; }
-  .pw .cases b { font-weight: 700; } .pw .cases i { font-style: normal; color: var(--pz-ink2); font-weight: 600; }
+  .pw .cases { display: grid; grid-template-columns: max-content auto; column-gap: 1em; row-gap: 2px; } /* 식 칸을 가장 긴 식 너비로 → 좁은 화면에서도 조건 (x < 1)이 한 줄에 */
+  .pw .cases > span { display: contents; }
+  .pw .cases b { font-weight: 700; } .pw .cases i { white-space: nowrap; font-style: normal; color: var(--pz-ink2); font-weight: 600; }
   .miniTable { flex: 1 1 0; min-width: 200px; }
   .miniTableTitle { font-size: 15px; font-weight: 800; margin-bottom: 6px; }
   .miniTable.isLeft .miniTableTitle { color: var(--leftInk); }
@@ -181,7 +181,7 @@
         <!-- [2단계] 1단계 메모: 'f(x) = x (x<1) / f(x) = x+2 (x≥1)' 한 줄 표기 → 교과서처럼 중괄호 두 줄 -->
         <div class="eqDisplay pw" aria-label="f(x) = x (x < 1), x + 2 (x ≥ 1)">
           <span>f(x) =</span><span class="brace">{</span>
-          <span class="cases"><span><b>x</b><i>(x &lt; 1)</i></span><span><b>x + 2</b><i>(x ≥ 1)</i></span></span>
+          <span class="cases"><span><b>x</b><i>(x&nbsp;&lt;&nbsp;1)</i></span><span><b>x + 2</b><i>(x&nbsp;≥&nbsp;1)</i></span></span>
         </div>
       </div>
       <div class="sub" style="margin:10px 0 0">x = 1 근처에서 식이 바뀌는 함수예요. 왼쪽·오른쪽에서 각각 1에 가까이 가보면서 f(x)가 어디로 다가가는지 살펴보세요.</div>

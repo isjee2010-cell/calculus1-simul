@@ -1054,7 +1054,7 @@ function genProblemA(){
   const isCubic = Math.random() < 0.5;
   const coeffs = isCubic ? genCubicCoeffs() : genQuadCoeffs();
   const a = randInt(-3,0), b = a + randInt(3,5);
-  document.getElementById('pAEq').textContent = `f(x) = ${polyToString(coeffs)}, [a, b] = [${a}, ${b}]`;
+  document.getElementById('pAEq').textContent = `f(x) = ${polyToString(coeffs)}, [a, b] = [${a}, ${b}]`;
   pAPanel.setProblem({ coeffs, a, b });
   pAFound = pAPanel.getProblem().roots.map(()=>false);
   renderChecklistA();
@@ -1123,7 +1123,7 @@ function genProblemB(){
   const deltaF = polyEval(coeffs,b) - polyEval(coeffs,a);
   pB = { coeffs, a, b, deriv, m, M, deltaF };
   document.getElementById('pBEq').textContent = `f(x) = ${polyToString(coeffs)}`;
-  document.getElementById('pBInterval').textContent = `구간 [a, b] = [${a}, ${b}]  ·  f'(x) = ${polyToString(deriv)}`;
+  document.getElementById('pBInterval').textContent = `구간 [a, b] = [${a}, ${b}]  ·  f'(x) = ${polyToString(deriv)}`;
   document.getElementById('pBLower').value = '';
   document.getElementById('pBUpper').value = '';
   document.getElementById('pBFeedback').innerHTML = '';

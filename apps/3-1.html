@@ -236,7 +236,7 @@ summary{cursor:pointer;font-weight:700;color:var(--pz-accent-ink);font-size:15px
     <span class="page">곡선 하나로 정하기</span>
     <h2>지나는 점을 하나 정하면 곡선이 하나로 정해질까?</h2>
     <p>나만의 문제를 만들고, <span class="pz-term" data-tip="적분상수">적분상수</span> C를 조절해 직접 풀어 보세요.</p>
-    <p class="muted" id="t3hint">처음 값은 예시 문제 (접선의 기울기가 x−3이고 점 (2, 4)를 지나는 곡선)예요. 값을 바꿔 나만의 예를 만들어 보세요.</p>
+    <p class="muted" id="t3hint">처음 값은 예시 문제 (접선의 기울기가 x−3이고 점 (2,&nbsp;4)를 지나는 곡선)예요. 값을 바꿔 나만의 예를 만들어 보세요.</p>
    </div>
   </div>
   <div class="graphCol">
@@ -674,7 +674,7 @@ document.getElementById('dice3').addEventListener('click',()=>{
   S3.a=r(-1,2);S3.b=r(-4,4);S3.k=r(-4,4);if(!S3.a&&!S3.b&&!S3.k)S3.k=2;S3.p=r(-3,3);S3.q=r(-5,6);
   a3.sync();b3.sync();k3.sync();document.getElementById('t3hint').textContent='🎲 값이 무작위로 바뀌었어요. 이 예를 풀어 보거나, 값을 더 바꿔 보세요.';changed3();});
 document.getElementById('book3').addEventListener('click',()=>{Object.assign(S3,{a:0,b:1,k:-3,p:2,q:4});a3.sync();b3.sync();k3.sync();
-  document.getElementById('t3hint').textContent='예시 문제 (접선의 기울기가 x−3이고 점 (2, 4)를 지나는 곡선)로 돌아왔어요.';changed3();});
+  document.getElementById('t3hint').textContent='예시 문제 (접선의 기울기가 x−3이고 점 (2,\u00a04)를 지나는 곡선)로 돌아왔어요.';changed3();});
 (()=>{const cv=document.getElementById('cv3');cv.addEventListener('pointerdown',e=>{if(!cv._V)return;const d=toData(cv,e);
   S3.p=clamp(Math.round(d.x),-4,4);S3.q=clamp(Math.round(d.y),-30,30);changed3();});})();
 function render3(){
