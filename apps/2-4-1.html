@@ -1,0 +1,1489 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>접선을 찾아서 · 접선의 방정식</title>
+<style>
+  /* [2단계 디자인] 공통 테마(복숭아 하늘) 적용. 글꼴·바탕은 테마(PZ 블록)가 정한다. */
+
+  /* 앱 고유 변수 → 테마 토큰 연결 (하드코딩 색 금지) */
+  :root {
+    --bg: var(--pz-bg);
+    --panel: var(--pz-panel);
+    --panelSoft: var(--pz-soft);
+    --border: var(--pz-line);
+    --borderSoft: var(--pz-line);
+    --textPrimary: var(--pz-ink);
+    --textMuted: var(--pz-muted);
+    --textFaint: var(--pz-muted);      /* 보조 글자는 --pz-muted 보다 옅게 쓰지 않는다 */
+    --accent: var(--pz-accent-btn);
+    --accentInk: var(--pz-accent-ink);
+    --accentSoft: var(--pz-accent-soft);
+    --accentLine: var(--pz-line2);
+    --curveF: var(--pz-f);   --curveFInk: var(--pz-sky-ink);
+    --curveG: var(--pz-g);   --curveGInk: var(--pz-lav-ink);  --curveGBg: var(--pz-lav-soft);
+    --refLine: var(--pz-ref); --refInk: var(--pz-accent-ink); --refLineBg: var(--pz-rose-soft);
+    --secant: var(--pz-butter-line); --secantInk: var(--pz-butter-ink);
+    --success: var(--pz-ok-ink);  --successBg: var(--pz-ok-soft);
+    --danger: var(--pz-bad-ink);  --dangerBg: var(--pz-bad-soft);
+    --chartH: 420px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+
+  /* 한 줄 소개 + 탭 */
+  .tabs { margin-bottom: 16px; }
+  .tabBtn { white-space: nowrap; }
+
+  /* ===== 탭 패널: 1099px 이하 = [머리 → 그래프 → 조작 → 풀이] 한 줄,
+           1100px 이상 = 왼쪽 [머리·조작·풀이] + 오른쪽 그래프(sticky) ===== */
+  .tabPanel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .tabPanel > * { min-width: 0; margin: 0; }
+  @media (min-width: 1100px) {
+    .tabPanel {
+      grid-template-columns: minmax(340px, 1fr) minmax(0, 1.35fr);
+      grid-template-rows: auto auto auto 1fr;
+      grid-template-areas: "head graph" "ctrl graph" "sol graph" ". graph";
+      column-gap: 20px; align-items: start;
+    }
+    .aHead { grid-area: head; } .aCtrl { grid-area: ctrl; } .aSol { grid-area: sol; }
+    .aGraph { grid-area: graph; align-self: start; }
+  }
+
+  /* 카드 */
+  .card {
+    background: var(--pz-panel); border: 2px solid var(--pz-line); border-radius: var(--pz-r-lg);
+    padding: 18px 20px; box-shadow: var(--pz-shadow);
+  }
+  .softBox { background: var(--pz-soft); border-radius: var(--pz-r-md); padding: 12px 16px; }
+  .sub { font-size: 15.5px; color: var(--pz-ink2); margin: 0 0 10px; line-height: 1.6; }
+
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .headRow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  input[type=number] { width: 100px; } /* 모양·포커스는 theme.css */
+
+  /* 버튼: 주 행동 = .pz-btn-primary, 보조 = .pz-btn-soft, 덜 중요 = .pz-btn-ghost (HTML에 클래스) */
+  .btnSm { padding: 9px 15px; font-size: 15px; }
+
+  /* 그래프 카드 */
+  .graphCard { padding: 14px 16px 12px; }
+  /* 주의: 맨 canvas 선택자는 테마의 축하(컨페티) 캔버스까지 덮으므로 그래프 카드 안으로 한정 */
+  .graphCard canvas { width: 100%; height: var(--chartH); display: block; border-radius: var(--pz-r-md); margin: 0; background: var(--pz-panel); }
+  .graphFoot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+  /* 함수 선택 = 칩 (.pz-chip) */
+  .fnTabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+
+  .slabel { font-size: 15.5px; color: var(--pz-ink2); }
+  .hint { font-size: 15px; color: var(--pz-muted); margin-top: 6px; line-height: 1.6; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 15.5px; }
+  td { padding: 8px 6px; vertical-align: top; }
+  .rowLabel { color: var(--pz-muted); }
+  .colRef { font-weight: 700; }
+  .colLive { color: var(--refInk); font-weight: 700; }
+  .colF { color: var(--curveFInk); font-weight: 700; }
+  .colG { color: var(--curveGInk); font-weight: 700; }
+  .mono { font-family: 'JetBrains Mono', var(--pz-mono); }
+
+  .eqDisplay { font-family: 'JetBrains Mono', var(--pz-mono); font-size: 20px; color: var(--pz-ink); font-weight: 700; overflow-wrap: anywhere; }
+  .eqBox { background: var(--pz-soft); border-radius: var(--pz-r-md); padding: 10px 16px; }
+  .eqBox .fnName { font-family: 'JetBrains Mono', var(--pz-mono); font-weight: 700; font-size: 20px; }
+
+  .footer { text-align: center; font-size: 13px; color: var(--pz-muted); margin-top: 24px; }
+  .tip { font-size: 15px; color: var(--pz-muted); margin-top: 18px; line-height: 1.65; }
+
+  /* 피드백 = .pz-feedback 모양 (민트/로즈/하늘), 색+기호(✓/✗) */
+  .feedback { border-radius: var(--pz-r-md); padding: 12px 14px; font-size: 15.5px; font-weight: 600; margin-top: 10px; line-height: 1.55; }
+  .feedback.correct { background: var(--pz-ok-soft); color: var(--pz-ok-ink); }
+  .feedback.wrong { background: var(--pz-bad-soft); color: var(--pz-bad-ink); }
+  .feedback.info { background: var(--pz-info-soft); color: var(--pz-info-ink); }
+  .feedback.correct::before { content: "✓ "; font-weight: 800; }
+  .feedback.wrong::before { content: "✗ "; font-weight: 800; }
+  .feedback:empty { display: none; }
+
+  /* 찾은 해 체크 칩: 확정 버튼 위에 이름표와 함께 */
+  .foundRow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0 10px; }
+  .foundRow .slabel { font-weight: 600; }
+  .checklist { display: flex; gap: 8px; flex-wrap: wrap; }
+  .checkItem { padding: 7px 14px; border-radius: var(--pz-r-pill); font-size: 15px; font-weight: 700; background: var(--pz-panel); color: var(--pz-muted); border: 2px dashed var(--pz-line2); }
+  .checkItem.done { background: var(--pz-ok-soft); color: var(--pz-ok-ink); border: 2px solid var(--pz-ok); }
+
+  .solutionSteps { margin-top: 6px; }
+  .stepItem { padding: 11px 0; border-top: 2px dashed var(--pz-line); font-size: 15.5px; line-height: 1.75; color: var(--pz-ink); }
+  .stepItem:first-child { border-top: none; }
+  .stepNum { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--pz-accent-soft); color: var(--pz-accent-ink); font-weight: 700; font-size: 14px; margin-right: 8px; }
+
+  .probBadge { display: inline-block; font-size: 14px; font-weight: 700; color: var(--pz-accent-ink); background: var(--pz-accent-soft); padding: 6px 13px; border-radius: var(--pz-r-pill); }
+</style>
+<!-- PZ:HEAD -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../shared/theme.css">
+<script type="application/json" id="pz-meta">{"slug": "2-4-1", "unit": "2-4-1", "title": "접선을 찾아서", "group": "도함수의 활용", "home": "../index.html", "guide": "../guides/2-4-1.html"}</script>
+<script id="pz-ui" src="../shared/ui.js"></script>
+<!-- /PZ:HEAD -->
+</head>
+<body>
+<div class="wrap pz-wrap">
+  <!-- [2단계] 상단 바가 단원·제목을 보여 주므로 앱 제목(h1)·눈썹 문구는 지우고 한 줄 소개만 남김 -->
+  <p class="desc pz-desc"><span class="pz-term" data-tip="할선">할선</span>이 <span class="pz-term" data-tip="접선">접선</span>이 되는 순간을 관찰하고, 여러 유형의 접선 문제를 그래프와 함께 탐구해보세요.</p>
+
+  <div class="tabs pz-tabs" role="tablist">
+    <button class="tabBtn pz-tab active" id="tabBtn1" onclick="showTab(1)" role="tab" aria-selected="true">1. 개념</button>
+    <button class="tabBtn pz-tab" id="tabBtn2" onclick="showTab(2)" role="tab" aria-selected="false">2. 기본형</button>
+    <button class="tabBtn pz-tab" id="tabBtn3" onclick="showTab(3)" role="tab" aria-selected="false">3. 평행조건</button>
+    <button class="tabBtn pz-tab" id="tabBtn4" onclick="showTab(4)" role="tab" aria-selected="false">4. 외부점</button>
+    <button class="tabBtn pz-tab" id="tabBtn5" onclick="showTab(5)" role="tab" aria-selected="false">5. 공통접선</button>
+  </div>
+
+  <!-- ============ TAB 1: 개념 ============ -->
+  <div id="tab1" class="tabPanel">
+    <section class="card aHead">
+      <div class="fnTabs">
+        <button type="button" class="fnTab pz-chip active" id="cFn0" onclick="setConceptFn(0)">이차함수</button>
+        <button type="button" class="fnTab pz-chip" id="cFn1" onclick="setConceptFn(1)">삼차함수①</button>
+        <button type="button" class="fnTab pz-chip" id="cFn2" onclick="setConceptFn(2)">삼차함수②</button>
+      </div>
+      <div class="eqBox">
+        <div class="hint" style="margin:0 0 2px">함수식</div>
+        <div class="eqDisplay" id="cFnEq"></div>
+      </div>
+    </section>
+
+    <section class="card graphCard aGraph pz-sticky">
+      <canvas id="conceptChart" width="700" height="260" aria-label="곡선 y=f(x)와 접선·할선 그래프"></canvas>
+      <div class="graphFoot">
+        <div class="hint" style="margin:0">🤏 드래그로 이동 · 휠/두 손가락으로 확대·축소</div>
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="resetConceptView()">↺ 보기 초기화</button>
+      </div>
+    </section>
+
+    <section class="card aCtrl">
+      <div class="sliderBlock pz-slider-block">
+        <div class="sliderTop pz-slider-top"><span class="slabel"><span class="sym pz-sym">a</span> 접점의 x좌표</span></div>
+        <div class="sliderRow pz-slider-row">
+          <input type="range" id="sliderCA" min="-3" max="3" step="0.1">
+          <input type="number" id="numCA" step="0.1">
+        </div>
+      </div>
+      <div class="sliderBlock pz-slider-block" style="margin-bottom:0">
+        <div class="sliderTop pz-slider-top"><span class="slabel"><span class="sym pz-sym">h</span> Δx (두 번째 점까지 거리)</span></div>
+        <div class="sliderRow pz-slider-row">
+          <input type="range" id="sliderCH" min="-3" max="3" step="0.05">
+          <input type="number" id="numCH" step="0.05">
+        </div>
+        <div class="hint">h를 0에 가깝게 움직여보세요. 노란색 <span class="pz-term" data-tip="할선">할선</span>이 산호색 점선(<span class="pz-term" data-tip="접선">접선</span>)에 겹쳐지는 걸 볼 수 있어요.</div>
+        <div class="pz-reset-row"><button class="pz-btn pz-btn-ghost btnSm" onclick="resetConceptValues()">↺ 처음 값으로</button></div>
+      </div>
+    </section>
+
+    <section class="card aSol">
+      <h3 class="cardTitle pz-card-head">📐 평균변화율이 순간변화율로 수렴하는 과정</h3>
+      <table>
+        <tr><td></td><td class="colRef" style="color:var(--secantInk)"><span class="pz-term" data-tip="평균변화율">평균변화율</span> (할선, 현재 h)</td><td class="colLive"><span class="pz-term" data-tip="순간변화율">순간변화율</span> = 접선의 기울기 = f'(a)</td></tr>
+        <tr><td class="rowLabel">값</td><td class="mono" id="cAvgRate"></td><td class="mono" id="cInstRate"></td></tr>
+      </table>
+      <div class="feedback info" id="cConverge" style="margin-top:10px"></div>
+      <div class="hint" style="margin-top:12px">f'(x) = <span id="cDerivEq" class="mono" style="color:var(--pz-ink)"></span></div>
+      <div class="hint">접점 (a, f(a))에서의 접선의 방정식: <span id="cTangentEq" class="mono" style="color:var(--refInk);font-weight:700"></span></div>
+    </section>
+  </div>
+
+  <!-- ============ TAB 2: 기본형 ============ -->
+  <div id="tab2" class="tabPanel" style="display:none">
+    <section class="card aHead">
+      <div class="headRow">
+        <div class="probBadge">곡선 위의 점에서의 접선</div>
+        <button class="btnGhost pz-btn pz-btn-soft btnSm" onclick="genProblem2()">🔄 새 문제</button>
+      </div>
+      <div class="sub">곡선 위의 점 (a, f(a))에서의 <span class="pz-term" data-tip="접선">접선</span>의 방정식 y = mx + k 를 구해보세요.</div>
+      <div class="eqBox">
+        <div class="eqDisplay" id="p2Eq"></div>
+        <div class="hint" id="p2Point" style="margin-top:4px"></div>
+      </div>
+    </section>
+
+    <section class="card graphCard aGraph pz-sticky">
+      <canvas id="p2Chart" width="700" height="260" aria-label="곡선 y=f(x)와 접점 P 그래프"></canvas>
+      <div class="graphFoot">
+        <div class="hint" style="margin:0">🤏 드래그·휠로 확대/이동</div>
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="resetP2View()">↺ 보기 초기화</button>
+      </div>
+    </section>
+
+    <section class="card aCtrl">
+      <div class="row" style="gap:16px;align-items:flex-end">
+        <div>
+          <div class="slabel" style="margin-bottom:6px">기울기 m</div>
+          <input type="number" id="p2InputM" step="0.5">
+        </div>
+        <div>
+          <div class="slabel" style="margin-bottom:6px">y절편 k</div>
+          <input type="number" id="p2InputK" step="0.5">
+        </div>
+        <button class="btnPrimary pz-btn pz-btn-primary" onclick="checkAnswer2()">확인</button>
+      </div>
+      <div id="p2Feedback"></div>
+    </section>
+
+    <section class="card aSol">
+      <div class="headRow" style="margin:0">
+        <h3 class="cardTitle pz-card-head" style="margin:0">✏️ 풀이 보기</h3>
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="toggleSolution2()" id="p2SolBtn">펼치기</button>
+      </div>
+      <div class="solutionSteps pz-steps" id="p2Solution" style="display:none"></div>
+    </section>
+  </div>
+
+  <!-- ============ TAB 3: 평행조건 ============ -->
+  <div id="tab3" class="tabPanel" style="display:none">
+    <section class="card aHead">
+      <div class="headRow">
+        <div class="probBadge">기울기(평행조건)가 주어진 접선</div>
+        <button class="btnGhost pz-btn pz-btn-soft btnSm" onclick="genProblem3()">🔄 새 문제</button>
+      </div>
+      <div class="sub">곡선 y = f(x) 에 접하면서, 아래 산호색 점선과 평행한 <span class="pz-term" data-tip="접선">접선</span>을 찾아보세요.</div>
+      <div class="eqBox">
+        <div class="eqDisplay" id="p3Eq"></div>
+        <div class="hint" id="p3RefLine" style="margin-top:4px"></div>
+      </div>
+    </section>
+
+    <section class="card graphCard aGraph pz-sticky">
+      <canvas id="p3Chart" width="700" height="260" aria-label="곡선, 기준 직선, 점 P에서의 접선 그래프"></canvas>
+      <div class="graphFoot">
+        <div class="hint" style="margin:0">🤏 드래그·휠로 확대/이동</div>
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="resetP3View()">↺ 보기 초기화</button>
+      </div>
+    </section>
+
+    <section class="card aCtrl">
+      <div class="sliderBlock pz-slider-block" style="margin-bottom:0">
+        <div class="sliderTop pz-slider-top"><span class="slabel"><span class="sym pz-sym">t</span> 접점의 x좌표 (드래그해서 탐색)</span></div>
+        <div class="sliderRow pz-slider-row">
+          <input type="range" id="sliderP3T" min="-4" max="4" step="0.05">
+          <input type="number" id="numP3T" step="0.05">
+        </div>
+      </div>
+      <div class="feedback info" id="p3LiveCheck"></div>
+      <div class="foundRow"><span class="slabel">찾은 해</span><div class="checklist" id="p3Checklist"></div></div>
+      <button class="btnPrimary pz-btn pz-btn-primary" onclick="lockAnswer3()">이 위치를 답으로 확정</button>
+      <div id="p3Feedback"></div>
+    </section>
+
+    <section class="card aSol">
+      <div class="headRow" style="margin:0">
+        <h3 class="cardTitle pz-card-head" style="margin:0">✏️ 풀이 보기</h3>
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="toggleSolution3()" id="p3SolBtn">펼치기</button>
+      </div>
+      <div class="solutionSteps pz-steps" id="p3Solution" style="display:none"></div>
+    </section>
+  </div>
+
+  <!-- ============ TAB 4: 외부점 ============ -->
+  <div id="tab4" class="tabPanel" style="display:none">
+    <section class="card aHead">
+      <div class="headRow">
+        <div class="probBadge">곡선 밖의 점에서 그은 접선</div>
+        <button class="btnGhost pz-btn pz-btn-soft btnSm" onclick="genProblem4()">🔄 새 문제</button>
+      </div>
+      <div class="sub">곡선 밖의 점 Q를 지나는 <span class="pz-term" data-tip="접선">접선</span>을 두 개 모두 찾아보세요.</div>
+      <div class="eqBox">
+        <div class="eqDisplay" id="p4Eq"></div>
+        <div class="hint" id="p4Point" style="margin-top:4px"></div>
+      </div>
+    </section>
+
+    <section class="card graphCard aGraph pz-sticky">
+      <canvas id="p4Chart" width="700" height="260" aria-label="곡선, 외부의 점 Q, 점 P에서의 접선 그래프"></canvas>
+      <div class="graphFoot">
+        <div class="hint" style="margin:0">🤏 드래그·휠로 확대/이동</div>
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="resetP4View()">↺ 보기 초기화</button>
+      </div>
+    </section>
+
+    <section class="card aCtrl">
+      <div class="sliderBlock pz-slider-block" style="margin-bottom:0">
+        <div class="sliderTop pz-slider-top"><span class="slabel"><span class="sym pz-sym">t</span> 접점의 x좌표 (드래그해서 탐색)</span></div>
+        <div class="sliderRow pz-slider-row">
+          <input type="range" id="sliderP4T" min="-4" max="4" step="0.05">
+          <input type="number" id="numP4T" step="0.05">
+        </div>
+      </div>
+      <div class="feedback info" id="p4LiveCheck"></div>
+      <div class="foundRow"><span class="slabel">찾은 접선</span><div class="checklist" id="p4Checklist"></div></div>
+      <button class="btnPrimary pz-btn pz-btn-primary" onclick="lockAnswer4()">이 위치를 답으로 확정</button>
+      <div id="p4Feedback"></div>
+    </section>
+
+    <section class="card aSol">
+      <div class="headRow" style="margin:0">
+        <h3 class="cardTitle pz-card-head" style="margin:0">✏️ 풀이 보기</h3>
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="toggleSolution4()" id="p4SolBtn">펼치기</button>
+      </div>
+      <div class="solutionSteps pz-steps" id="p4Solution" style="display:none"></div>
+    </section>
+  </div>
+
+  <!-- ============ TAB 5: 공통접선 (심화) ============ -->
+  <div id="tab5" class="tabPanel" style="display:none">
+    <section class="card aHead">
+      <div class="headRow">
+        <div class="probBadge">🌟 심화 · 두 곡선의 공통접선</div>
+        <button class="btnGhost pz-btn pz-btn-soft btnSm" onclick="genProblem5()">🔄 새 문제</button>
+      </div>
+      <div class="sub">두 곡선에 동시에 접하는 직선(공통접선)을 찾아보세요.</div>
+      <!-- [2단계] 식 글자 크기 14px 고정 제거 → 다른 식과 같은 크기, 곡선 색과 같은 이름 색 -->
+      <div class="eqBox">
+        <div class="eqDisplay"><span class="fnName" style="color:var(--curveFInk)">f(x)</span> = <span id="p5FEq"></span></div>
+        <div class="eqDisplay" style="margin-top:2px"><span class="fnName" style="color:var(--curveGInk)">g(x)</span> = <span id="p5GEq"></span></div>
+      </div>
+    </section>
+
+    <section class="card graphCard aGraph pz-sticky">
+      <canvas id="p5Chart" width="700" height="260" aria-label="두 곡선 f, g와 각 접선 그래프"></canvas>
+      <div class="graphFoot">
+        <div class="hint" style="margin:0">🤏 드래그·휠로 확대/이동</div>
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="resetP5View()">↺ 보기 초기화</button>
+      </div>
+    </section>
+
+    <section class="card aCtrl">
+      <div class="sliderBlock pz-slider-block">
+        <div class="sliderTop pz-slider-top"><span class="slabel"><span class="sym pz-sym" style="color:var(--curveFInk)">t₁</span> f 위의 접점</span></div>
+        <div class="sliderRow pz-slider-row">
+          <input type="range" id="sliderP5T1" min="-4" max="4" step="0.05">
+          <input type="number" id="numP5T1" step="0.05">
+        </div>
+      </div>
+      <div class="sliderBlock pz-slider-block">
+        <div class="sliderTop pz-slider-top"><span class="slabel"><span class="sym pz-sym" style="color:var(--curveGInk)">t₂</span> g 위의 접점</span></div>
+        <div class="sliderRow pz-slider-row">
+          <input type="range" id="sliderP5T2" min="-4" max="4" step="0.05">
+          <input type="number" id="numP5T2" step="0.05">
+        </div>
+      </div>
+
+      <table>
+        <tr><td></td><td class="colF">f의 접선</td><td class="colG">g의 접선</td></tr>
+        <tr><td class="rowLabel">기울기</td><td class="mono" id="p5SlopeF"></td><td class="mono" id="p5SlopeG"></td></tr>
+        <tr><td class="rowLabel">y절편</td><td class="mono" id="p5InterceptF"></td><td class="mono" id="p5InterceptG"></td></tr>
+      </table>
+      <div class="feedback info" id="p5LiveCheck"></div>
+      <div id="p5Feedback"></div>
+    </section>
+
+    <section class="card aSol">
+      <div class="headRow" style="margin:0">
+        <h3 class="cardTitle pz-card-head" style="margin:0">✏️ 풀이 보기</h3>
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="toggleSolution5()" id="p5SolBtn">펼치기</button>
+      </div>
+      <div class="solutionSteps pz-steps" id="p5Solution" style="display:none"></div>
+    </section>
+  </div>
+
+  <p class="tip">Tip. "개념" 탭에서 h를 0으로 움직여 <span class="pz-term" data-tip="접선">접선</span>의 기울기가 곧 <span class="pz-term" data-tip="도함수">도함수</span>값이라는 걸 확인한 뒤, 나머지 탭에서 유형을 연습해보세요. 슬라이더로 직접 탐색한 뒤 풀이를 확인하면 기억에 더 오래 남아요.</p>
+  <p class="footer">✏️ made by 지인섭</p>
+</div>
+<script>
+/* ================= 공통: 그래프 크기 ================= */
+// [2단계] 앱 자체 '화면 설정(좌표평면 크기·글자 크기)'은 상단 바(가/가+/가++)와 겹쳐 제거.
+// 그래프 크기는 fitChart()가 화면·글자 크기에 맞춰 자동으로 정한다.
+let chartMaxW = 700, chartH = 420;
+let currentTab = 1;
+
+/* [2단계] 테마 색 읽기: 그래프 의미 색은 모두 --pz-* 토큰에서 (PastelUI.color). 
+   앱 스크립트가 PZ:JS보다 먼저 실행되므로 PastelUI가 아직 없을 때는 CSS 변수를 직접 읽는다. */
+function tok(name){
+  if (window.PastelUI) return PastelUI.color(name);
+  let v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(), g = 0;
+  while (/^var\(/.test(v) && g++ < 6) v = getComputedStyle(document.documentElement).getPropertyValue(v.replace(/^var\(\s*|\s*\)$/g,'')).trim();
+  return v || '#888';
+}
+/* [2단계] 화면 확대 비율: #pz-main 의 CSS zoom 때문에 getBoundingClientRect(화면 px)와
+   clientWidth(CSS px)가 다르다. 둘의 비율을 직접 재면 zoom 값을 몰라도 정확하다. */
+function cssScale(el){
+  const r = el.getBoundingClientRect();
+  return (el.clientWidth > 0 && r.width > 0) ? r.width / el.clientWidth : 1;
+}
+const SPLIT_MQ = window.matchMedia('(min-width: 1100px)');
+/* [2단계] 보이는 탭의 그래프 높이를 정한다.
+   - 1100px 이상(스플릿): 그래프 카드가 처음 화면(스크롤 0)에서 아래 끝까지 다 보이도록.
+   - 1099px 이하(한 줄): 폭의 62% 정도, 화면 높이의 60%를 넘지 않게. */
+function fitChart(n){
+  const panel = document.getElementById('tab'+n);
+  const canvas = panel && panel.querySelector('canvas');
+  if (!canvas || !canvas.clientWidth) return;
+  const card = canvas.closest('.graphCard');
+  const k = cssScale(canvas);
+  const cssW = canvas.clientWidth;
+  const vh = window.innerHeight / k;                       // 화면 높이를 CSS px로
+  let h;
+  if (SPLIT_MQ.matches){
+    const cr = card.getBoundingClientRect(), vr = canvas.getBoundingClientRect();
+    const top0 = (cr.top + window.scrollY) / k;            // 스크롤 0일 때 카드 위끝 (CSS px)
+    const chrome = (cr.height - vr.height) / k;            // 카드 안 캔버스 외 높이(여백·안내줄)
+    const bar = (document.querySelector('.pz-topbar') || {offsetHeight:64}).offsetHeight / k;
+    const fitFirst = vh - Math.min(top0, vh * 0.45) - chrome - 16;     // 처음 화면에 다 보이게
+    const fitSticky = vh - bar - 12 / k - chrome - 24;                 // sticky 상태에서도 넘치지 않게
+    h = Math.min(fitFirst, fitSticky, cssW * 1.1);
+    h = Math.max(300, h);
+  } else {
+    h = Math.max(280, Math.min(cssW * 0.62, vh * 0.6));
+  }
+  h = Math.round(h);
+  if (h !== chartH){ chartH = h; document.documentElement.style.setProperty('--chartH', h + 'px'); }
+}
+
+function redrawTab(n){
+  fitChart(n);
+  if (n===1) redrawConceptChart();
+  else if (n===2) refreshP2Chart();
+  else if (n===3) redrawP3Chart();
+  else if (n===4) redrawP4Chart();
+  else if (n===5) redrawP5Chart();
+}
+
+/* ================= 공통: 탭 전환 ================= */
+function showTab(n) {
+  currentTab = n;
+  [1,2,3,4,5].forEach(i => {
+    document.getElementById('tab'+i).style.display = (i===n) ? '' : 'none';
+    const b = document.getElementById('tabBtn'+i);
+    b.classList.toggle('active', i===n);
+    b.setAttribute('aria-selected', String(i===n));
+  });
+  // [2단계] 새 패널을 부드럽게 나타나게
+  if (window.PastelUI) PastelUI.fade(document.getElementById('tab'+n));
+  // 탭이 숨겨진 상태(display:none)에서는 캔버스 너비가 0으로 계산되어 그래프가
+  // 작고 흐릿하게 그려진다. 탭이 실제로 보여진 직후(레이아웃 확정 후) 다시 그려서 보정한다.
+  requestAnimationFrame(()=> redrawTab(n));
+}
+
+/* ================= 공통: 다항함수 엔진 ================= */
+// 계수 배열은 [c0, c1, c2, ...] = c0 + c1*x + c2*x^2 + ... 형태
+function polyEval(c, x){
+  let r = 0, p = 1;
+  for (let i=0;i<c.length;i++){ r += c[i]*p; p *= x; }
+  return r;
+}
+function polyDeriv(c){
+  const d = [];
+  for (let i=1;i<c.length;i++) d.push(c[i]*i);
+  return d.length ? d : [0];
+}
+function fmtNum(v){
+  const r = Math.round(v*100)/100;
+  return (Object.is(r,-0) ? 0 : r).toString();
+}
+function polyToString(c){
+  const sup = {2:'²',3:'³',4:'⁴'};
+  const terms = [];
+  for (let i=c.length-1;i>=0;i--){
+    // [버그수정] 표시용(소수 둘째 자리) 반올림을 먼저 한 뒤 0·±1 판정 — "0x - 2", "1x - 3.25" 같은 표시 방지
+    const coef = Math.round(c[i]*100)/100;
+    if (coef === 0) continue;
+    const coefAbs = Math.abs(coef);
+    let varPart = i===0 ? '' : (i===1 ? 'x' : 'x'+(sup[i]||('^'+i)));
+    let coefPart = i===0 ? fmtNum(coefAbs) : (coefAbs===1 ? '' : fmtNum(coefAbs));
+    terms.push({ neg: coef<0, str: coefPart+varPart });
+  }
+  if (!terms.length) return '0';
+  let out = (terms[0].neg?'-':'') + terms[0].str;
+  for (let i=1;i<terms.length;i++) out += (terms[i].neg?' - ':' + ') + terms[i].str;
+  return out;
+}
+function lineToString(m,k){ return 'y = ' + polyToString([k,m]); }
+/* [버그수정] 점-기울기 꼴 y - f(a) = f'(a)(x - a) 를 부호에 맞게 표기 ("y - -3", "(x - -2)", "y - 0" 방지) */
+function pointSlopeString(a, fa, m){
+  const ar = Math.round(a*100)/100, fr = Math.round(fa*100)/100, mr = Math.round(m*100)/100;
+  const lhs = fr===0 ? 'y' : `y ${fr>0?'-':'+'} ${fmtNum(Math.abs(fr))}`;
+  const xp = ar===0 ? 'x' : `(x ${ar>0?'-':'+'} ${fmtNum(Math.abs(ar))})`;
+  const rhs = mr===0 ? '0' : (mr===1 ? '' : (mr===-1 ? '-' : fmtNum(mr))) + xp;
+  return `${lhs} = ${rhs}`;
+}
+/* [버그수정] 가로:세로 1:1 축척(squareView) 때문에 y 범위가 크면 x 범위가 수십~수백까지 늘어나
+   곡선이 세로 막대처럼 보이던 문제. 문제 탭의 기본 보기는 y 범위를 핵심 점(접점·Q 등) 주변으로 좁힌다.
+   (화면 비율에 맞게 y 범위는 그릴 때 squareView가 다시 넓혀 준다.) */
+function focusViewY(view, ys){
+  const spanX = view.xMax - view.xMin;
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  const pad = Math.max(1, (hi-lo)*0.15);
+  lo -= pad; hi += pad;
+  if (hi - lo < spanX*0.5){ const c = (lo+hi)/2; lo = c - spanX*0.25; hi = c + spanX*0.25; }
+  if (hi - lo >= view.yMax - view.yMin) return view;
+  return { xMin: view.xMin, xMax: view.xMax, yMin: lo, yMax: hi };
+}
+function solveQuadratic(A,B,C){
+  if (Math.abs(A) < 1e-9){
+    if (Math.abs(B) < 1e-9) return [];
+    return [-C/B];
+  }
+  const disc = B*B - 4*A*C;
+  if (disc < -1e-6) return [];
+  const sq = Math.sqrt(Math.max(0,disc));
+  const r1 = (-B+sq)/(2*A), r2 = (-B-sq)/(2*A);
+  return Math.abs(r1-r2) < 1e-6 ? [r1] : [r1,r2].sort((a,b)=>a-b);
+}
+function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function randChoice(arr){ return arr[randInt(0,arr.length-1)]; }
+
+/* 좌표평면 눈금을 1,2,5 * 10^n 같은 '보기 좋은' 값으로 계산 (소수점 눈금 방지) */
+function niceStep(range, targetCount){
+  if (range <= 0) return 1;
+  const rough = range/targetCount;
+  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+  const norm = rough/mag;
+  let step;
+  if (norm < 1.5) step = 1;
+  else if (norm < 3) step = 2;
+  else if (norm < 7) step = 5;
+  else step = 10;
+  return step*mag;
+}
+function niceTicks(min, max, targetCount){
+  const step = niceStep(max-min, targetCount);
+  const start = Math.ceil(min/step - 1e-9)*step;
+  const ticks = [];
+  for (let v=start; v<=max+step*1e-6; v+=step) ticks.push(Math.round(v/step)*step);
+  return { ticks, step };
+}
+function tickLabel(v, step){
+  const decimals = step < 1 ? Math.max(0, Math.ceil(-Math.log10(step))) : 0;
+  let s = v.toFixed(decimals);
+  if (s==='-0' || s==='-0.0' || s==='-0.00') s = s.slice(1);
+  return s;
+}
+function domainForPoints(pts, pad){
+  const mn = Math.min(...pts), mx = Math.max(...pts);
+  let xMin = mn-pad, xMax = mx+pad;
+  if (xMax-xMin < 4){ const c=(xMin+xMax)/2; xMin=c-2; xMax=c+2; }
+  return { xMin, xMax };
+}
+/* 가로 한 칸과 세로 한 칸이 같은 길이를 나타내도록 뷰를 보정 (기울기 왜곡 방지).
+   렌더러(drawLineChart)와 팬줌 상호작용(attachPanZoom) 양쪽에서 동일하게 사용해야
+   화면에 보이는 것과 드래그/줌 좌표 계산이 어긋나지 않는다. */
+function squareView(view, plotW, plotH){
+  const dataW = view.xMax-view.xMin, dataH = view.yMax-view.yMin;
+  const scaleX = plotW/dataW, scaleY = plotH/dataH;
+  const scale = Math.min(scaleX, scaleY);
+  const newDataW = plotW/scale, newDataH = plotH/scale;
+  const cx = (view.xMin+view.xMax)/2, cy = (view.yMin+view.yMax)/2;
+  return { xMin: cx-newDataW/2, xMax: cx+newDataW/2, yMin: cy-newDataH/2, yMax: cy+newDataH/2 };
+}
+function setSliderRange(sliderId, numId, min, max){
+  const s = document.getElementById(sliderId), n = document.getElementById(numId);
+  s.min = min.toFixed(1); s.max = max.toFixed(1);
+  n.min = min.toFixed(1); n.max = max.toFixed(1);
+}
+
+/* ================= 공통: 그래프 렌더러 + 팬줌 (재사용 컴포넌트) ================= */
+/* [2단계] 그래프 여백: 그리기(drawLineChart)와 드래그(attachPanZoom)가 같은 값을 써야 좌표가 맞는다 */
+const CHART_PAD = { l:46, r:14, t:14, b:28 };
+const CHART_FONT = '"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+/* [2단계] 흰 테두리(halo)를 두른 글자 — 곡선 위에 겹쳐도 읽히게 */
+function haloText(ctx, text, x, y, color){
+  ctx.save();
+  ctx.lineJoin = 'round'; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = color; ctx.fillText(text, x, y);
+  ctx.restore();
+}
+/* curves[i] = { fn, color, width, dash, alpha,
+                 tag:'이름표'(선 오른쪽 끝 근처에 선 이름), tagColor,
+                 marker:{x,y,label, kind:'move'|'fixed', color, labelPos:'ul'|'dr'} } */
+function drawLineChart(canvas, xMin, xMax, yMin, yMax, curves, xTickFn) {
+  // [2단계] 글자 크기(zoom)만큼 화면에서 커지므로 그만큼 해상도를 올려 선명하게
+  const dpr = (window.devicePixelRatio || 1) * cssScale(canvas);
+  const cssW = canvas.clientWidth || chartMaxW, cssH = canvas.clientHeight || chartH;
+  canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const padL = CHART_PAD.l, padR = CHART_PAD.r, padT = CHART_PAD.t, padB = CHART_PAD.b;
+  const plotW = cssW - padL - padR, plotH = cssH - padT - padB;
+
+  // 가로세로 한 칸의 길이를 통일 (기울기 시각 왜곡 방지)
+  ({ xMin, xMax, yMin, yMax } = squareView({xMin,xMax,yMin,yMax}, plotW, plotH));
+
+  function xPix(x){ return padL + (x-xMin)/(xMax-xMin)*plotW; }
+  function yPix(y){ return padT + (1-(y-yMin)/(yMax-yMin))*plotH; }
+
+  const { ticks: xTicks, step: xStep } = niceTicks(xMin, xMax, Math.max(4, Math.round(plotW/90)));
+  const { ticks: yTicks, step: yStep } = niceTicks(yMin, yMax, Math.max(4, Math.round(plotH/80)));
+
+  ctx.strokeStyle = tok('--pz-grid'); ctx.lineWidth = 1;
+  xTicks.forEach(x=>{
+    ctx.beginPath(); ctx.moveTo(xPix(x),padT); ctx.lineTo(xPix(x),padT+plotH); ctx.stroke();
+  });
+  yTicks.forEach(y=>{
+    ctx.beginPath(); ctx.moveTo(padL,yPix(y)); ctx.lineTo(padL+plotW,yPix(y)); ctx.stroke();
+  });
+  ctx.fillStyle = tok('--pz-muted'); ctx.font = '500 13px ' + CHART_FONT;
+  ctx.textAlign = 'center';
+  xTicks.forEach(x=>{
+    ctx.fillText(xTickFn ? xTickFn(x) : tickLabel(x, xStep), xPix(x), cssH-8);
+  });
+  ctx.textAlign = 'right';
+  yTicks.forEach(y=>{
+    ctx.fillText(tickLabel(y, yStep), padL-7, yPix(y)+4.5);
+  });
+  ctx.strokeStyle = tok('--pz-axis'); ctx.lineWidth = 1.6;
+  if (yMin < 0 && yMax > 0) {
+    ctx.beginPath(); ctx.moveTo(padL,yPix(0)); ctx.lineTo(padL+plotW,yPix(0)); ctx.stroke();
+  }
+  if (xMin < 0 && xMax > 0) {
+    ctx.beginPath(); ctx.moveTo(xPix(0),padT); ctx.lineTo(xPix(0),padT+plotH); ctx.stroke();
+  }
+
+  const tagSpots = [];
+  curves.forEach(curve => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(padL, padT, plotW, plotH);
+    ctx.clip();
+
+    ctx.strokeStyle = curve.color; ctx.lineWidth = curve.width || 3.5;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.globalAlpha = curve.alpha ?? 1;
+    if (curve.dash) ctx.setLineDash(curve.dash); else ctx.setLineDash([]);
+
+    const range = (yMax - yMin) || 1;
+    const clampMargin = range * 2;
+    const baseSteps = curve.steps || 500;
+
+    function safeY(x){
+      try { const v = curve.fn(x); return (typeof v === 'number' && isFinite(v)) ? v : NaN; }
+      catch(e){ return NaN; }
+    }
+
+    ctx.beginPath();
+    let started = false, tagAt = null;
+    for (let i=0;i<=baseSteps;i++){
+      const x = xMin + (i/baseSteps)*(xMax-xMin);
+      const y = safeY(x);
+      if (!isFinite(y)) { started = false; continue; }
+      const clampedY = Math.max(yMin - clampMargin, Math.min(yMax + clampMargin, y));
+      const px = xPix(x), py = yPix(clampedY);
+      if (!started) { ctx.moveTo(px,py); started = true; } else { ctx.lineTo(px,py); }
+      // 이름표 자리: 그래프 안쪽(위아래 여유 18px)에 있는 가장 오른쪽 점
+      if (curve.tag && py > padT+18 && py < padT+plotH-12 && px < padL+plotW-6) tagAt = {px, py};
+    }
+    ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.restore();
+    if (curve.tag && tagAt) tagSpots.push({ text: curve.tag, color: curve.tagColor || curve.color, ...tagAt });
+  });
+
+  // [2단계] 색+글자: 선마다 이름표 (서로 겹치면 위아래로 비켜 놓음)
+  ctx.font = '700 14px ' + CHART_FONT; ctx.textAlign = 'right';
+  const placed = [];
+  tagSpots.forEach(s=>{
+    let y = s.py - 9;
+    for (let g=0; g<6 && placed.some(p=> Math.abs(p.y - y) < 17 && Math.abs(p.x - s.px) < 90); g++) y += (s.py > padT+plotH/2 ? -18 : 18);
+    y = Math.max(padT+14, Math.min(padT+plotH-4, y));
+    placed.push({x:s.px, y});
+    haloText(ctx, s.text, s.px - 4, y, s.color);
+  });
+
+  // [2단계] 점: 움직이는 점 = 흰 채움 + --pz-point 굵은 테두리 / 고정된 점 = 채운 점. 이름은 15px 굵게.
+  (curves||[]).forEach(curve=>{
+    const m = curve.marker;
+    if (!m) return;
+    const px = xPix(m.x), py = yPix(m.y);
+    if (px < padL-8 || px > padL+plotW+8 || py < padT-8 || py > padT+plotH+8) return;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(px, py, m.kind === 'fixed' ? 6 : 7, 0, Math.PI*2);
+    if (m.kind === 'fixed'){
+      ctx.fillStyle = m.color || tok('--pz-ink2'); ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = tok('--pz-panel'); ctx.stroke();
+    } else {
+      ctx.fillStyle = tok('--pz-panel'); ctx.fill();
+      ctx.lineWidth = 3.5; ctx.strokeStyle = m.color || tok('--pz-point'); ctx.stroke();
+    }
+    ctx.restore();
+    if (m.label){
+      ctx.font = '800 15px ' + CHART_FONT; ctx.textAlign = 'center';
+      const dr = m.labelPos === 'dr';     // 'dr' = 오른쪽 아래 (두 점이 겹칠 때 이름이 가리지 않게)
+      haloText(ctx, m.label, px + (dr ? 14 : -13), py + (dr ? 25 : -13), tok('--pz-ink'));
+    }
+  });
+}
+
+/* [2단계] 움직이는 점이 화면 밖으로 나가면 축척은 그대로 두고 화면만 밀어서(pan) 다시 보이게 한다.
+   (1:1 축척 정책 유지 — 확대 비율은 바꾸지 않음) view를 직접 고쳐서 돌려준다. */
+function keepInView(view, canvas, pts){
+  if (!view || !canvas.clientWidth) return view;
+  const w = canvas.clientWidth - CHART_PAD.l - CHART_PAD.r, h = (canvas.clientHeight || chartH) - CHART_PAD.t - CHART_PAD.b;
+  const v = squareView(view, w, h);
+  const mx = (v.xMax - v.xMin) * 0.08, my = (v.yMax - v.yMin) * 0.1;
+  const xs = pts.map(p=>p.x).filter(isFinite), ys = pts.map(p=>p.y).filter(isFinite);
+  if (!xs.length) return view;
+  const lo = {x:Math.min(...xs), y:Math.min(...ys)}, hi = {x:Math.max(...xs), y:Math.max(...ys)};
+  function shift(l, hgh, a, b, m){
+    if (hgh - l > (b - a) - 2*m) return (l + hgh)/2 - (a + b)/2;   // 다 못 넣으면 가운데로
+    if (l < a + m) return l - (a + m);
+    if (hgh > b - m) return hgh - (b - m);
+    return 0;
+  }
+  const dx = shift(lo.x, hi.x, v.xMin, v.xMax, mx), dy = shift(lo.y, hi.y, v.yMin, v.yMax, my);
+  if (!dx && !dy) return view;
+  return { xMin: view.xMin+dx, xMax: view.xMax+dx, yMin: view.yMin+dy, yMax: view.yMax+dy };
+}
+
+function attachPanZoom(canvasId, getView, setView, redraw){
+  const canvas = document.getElementById(canvasId);
+  const PAD = CHART_PAD;
+  canvas.style.touchAction = 'none';
+  canvas.style.cursor = 'grab';
+
+  let dragging = false, lastPos = null, startPos = null, dragAxis = null, pinch = null;
+
+  // [2단계] 모든 좌표를 캔버스의 CSS px 단위로 계산한다. 글자 크기(CSS zoom)가 1이 아니면
+  // getBoundingClientRect·clientX는 화면 px(확대된 값), clientWidth는 CSS px라서
+  // 둘을 섞으면 드래그가 손가락보다 빠르거나 느려진다. → 화면 px ÷ k 로 바꿔 쓴다.
+  function plotSize(){
+    return { w: Math.max(1, canvas.clientWidth - PAD.l - PAD.r), h: Math.max(1, (canvas.clientHeight || chartH) - PAD.t - PAD.b) };
+  }
+  // 실제로 화면에 그려지는 것과 동일한 보정(가로세로 비율 1:1)을 적용한 뷰.
+  // drawLineChart가 그릴 때 내부적으로 squareView를 적용하므로, 드래그·줌 좌표 계산도
+  // 반드시 같은 보정을 거쳐야 "보이는 위치"와 "계산되는 데이터 좌표"가 어긋나지 않는다.
+  function effectiveView(){
+    const raw = getView();
+    if (!raw) return raw;
+    const { w, h } = plotSize();
+    return squareView(raw, w, h);
+  }
+  function dataFromPixel(px, py){
+    const v = effectiveView(); const { w, h } = plotSize();
+    return {
+      x: v.xMin + ((px - PAD.l) / w) * (v.xMax - v.xMin),
+      y: v.yMax - ((py - PAD.t) / h) * (v.yMax - v.yMin),
+    };
+  }
+  function pointerPos(e){
+    const rect = canvas.getBoundingClientRect();
+    const k = rect.width / Math.max(1, canvas.clientWidth);     // 화면 px / CSS px
+    const p = (e.touches && e.touches.length) ? e.touches[0] : e;
+    return { x: (p.clientX - rect.left) / k, y: (p.clientY - rect.top) / k };
+  }
+  function touchDist(t0, t1){ return Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY); }
+
+  function onDown(e){
+    if (!getView()) return;
+    if (e.touches && e.touches.length === 2){
+      pinch = { startDist: touchDist(e.touches[0], e.touches[1]), startView: effectiveView() };
+      dragging = false;
+      e.preventDefault();
+      return;
+    }
+    dragging = true;
+    lastPos = pointerPos(e);
+    startPos = lastPos;
+    dragAxis = null;
+    canvas.style.cursor = 'grabbing';
+  }
+  function onMove(e){
+    if (e.touches && e.touches.length === 2 && pinch){
+      const d = touchDist(e.touches[0], e.touches[1]);
+      const factor = pinch.startDist / Math.max(1, d);
+      const v0 = pinch.startView;
+      const cx = (v0.xMin + v0.xMax) / 2, cy = (v0.yMin + v0.yMax) / 2;
+      const halfX = (v0.xMax - v0.xMin) / 2 * factor, halfY = (v0.yMax - v0.yMin) / 2 * factor;
+      setView({ xMin: cx - halfX, xMax: cx + halfX, yMin: cy - halfY, yMax: cy + halfY });
+      redraw();
+      e.preventDefault();
+      return;
+    }
+    if (!dragging || !lastPos) return;
+    const pos = pointerPos(e);
+    let dxPix = pos.x - lastPos.x, dyPix = pos.y - lastPos.y;
+    if (dragAxis === null) {
+      const totalDx = pos.x - startPos.x, totalDy = pos.y - startPos.y;
+      if (Math.hypot(totalDx, totalDy) > 6) {
+        dragAxis = Math.abs(totalDx) > Math.abs(totalDy) ? 'x' : 'y';
+      }
+    }
+    if (dragAxis === 'x') dyPix = 0;
+    else if (dragAxis === 'y') dxPix = 0;
+
+    const { w, h } = plotSize();
+    const v = effectiveView();
+    const dx = -(dxPix / w) * (v.xMax - v.xMin);
+    const dy = (dyPix / h) * (v.yMax - v.yMin);
+    setView({ xMin: v.xMin + dx, xMax: v.xMax + dx, yMin: v.yMin + dy, yMax: v.yMax + dy });
+    lastPos = pos;
+    redraw();
+    e.preventDefault();
+  }
+  function onUp(){
+    dragging = false; pinch = null; lastPos = null; startPos = null; dragAxis = null;
+    canvas.style.cursor = 'grab';
+  }
+  function onWheel(e){
+    if (!getView()) return;
+    e.preventDefault();
+    const pos = pointerPos(e);
+    const before = dataFromPixel(pos.x, pos.y);
+    const factor = e.deltaY > 0 ? 1.12 : 0.89;
+    const v = effectiveView();
+    setView({
+      xMin: before.x - (before.x - v.xMin) * factor,
+      xMax: before.x + (v.xMax - before.x) * factor,
+      yMin: before.y - (before.y - v.yMin) * factor,
+      yMax: before.y + (v.yMax - before.y) * factor,
+    });
+    redraw();
+  }
+
+  canvas.addEventListener('mousedown', onDown);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+  canvas.addEventListener('touchstart', onDown, { passive:false });
+  canvas.addEventListener('touchmove', onMove, { passive:false });
+  canvas.addEventListener('touchend', onUp);
+  canvas.addEventListener('wheel', onWheel, { passive:false });
+}
+
+function computeAutoViewFn(fn, xMin, xMax, steps){
+  steps = steps || 400;
+  let yMin=Infinity, yMax=-Infinity;
+  for (let i=0;i<=steps;i++){
+    const x = xMin + (i/steps)*(xMax-xMin);
+    const y = fn(x);
+    if (typeof y === 'number' && isFinite(y)){ if (y<yMin) yMin=y; if (y>yMax) yMax=y; }
+  }
+  if (!isFinite(yMin) || !isFinite(yMax)){ yMin=-5; yMax=5; }
+  if (yMin===yMax){ yMin-=1; yMax+=1; }
+  const pad = (yMax-yMin)*0.2 || 1;
+  return { xMin, xMax, yMin: yMin-pad, yMax: yMax+pad };
+}
+function extendViewToY(view, ys){
+  let { xMin,xMax,yMin,yMax } = view;
+  let changed = false;
+  ys.forEach(y=>{
+    if (y < yMin){ yMin = y; changed = true; }
+    if (y > yMax){ yMax = y; changed = true; }
+  });
+  if (!changed) return view;
+  const pad = (yMax-yMin)*0.12;
+  return { xMin, xMax, yMin: yMin-pad, yMax: yMax+pad };
+}
+
+/* ================= 슬라이더+숫자 동기화 ================= */
+function bindPair(sliderId, numId, getSet, onChange){
+  const slider = document.getElementById(sliderId), num = document.getElementById(numId);
+  slider.addEventListener('input', ()=>{ getSet(Number(slider.value)); num.value = slider.value; onChange(); });
+  num.addEventListener('input', ()=>{
+    if (num.value.trim()==='') return; // [버그수정] 입력 중 빈칸을 0으로 처리하지 않음
+    let v = Number(num.value);
+    if (isNaN(v)) return;
+    const min = Number(slider.min), max = Number(slider.max);
+    v = Math.max(min, Math.min(max, v));
+    getSet(v); slider.value = v; onChange();
+  });
+  // [버그수정] 빈칸은 0으로 처리하지 않고(위 input 처리), 입력을 마치면 범위 밖 값은 실제 적용된 값으로 칸을 맞춤
+  num.addEventListener('change', ()=>{
+    const v = Number(num.value), min = Number(slider.min), max = Number(slider.max);
+    if (num.value.trim()==='' || isNaN(v)) { num.value = slider.value; return; }
+    if (v < min || v > max) num.value = Math.max(min, Math.min(max, v));
+  });
+}
+function setPair(sliderId, numId, v){
+  document.getElementById(sliderId).value = v;
+  document.getElementById(numId).value = v;
+}
+
+/* ================= TAB 1: 개념 ================= */
+const CONCEPT_FNS = [
+  { name:'이차함수', coeffs:[-1,-2,1] },
+  { name:'삼차함수①', coeffs:[0,-3,0,1] },
+  { name:'삼차함수②', coeffs:[0,0,3,-1] },
+];
+let conceptIdx = 0;
+let conceptCoeffs = CONCEPT_FNS[0].coeffs;
+let conceptDerivCoeffs = polyDeriv(conceptCoeffs);
+let concept = { a: 1, h: 1.5 };
+const CONCEPT_INIT = { ...concept };   // [UX] 처음 값으로
+let conceptView = { xMin:-4, xMax:4, yMin:-6, yMax:6 };
+
+function setConceptFn(idx){
+  conceptIdx = idx;
+  conceptCoeffs = CONCEPT_FNS[idx].coeffs;
+  conceptDerivCoeffs = polyDeriv(conceptCoeffs);
+  [0,1,2].forEach(i=> document.getElementById('cFn'+i).classList.toggle('active', i===idx));
+  document.getElementById('cFnEq').textContent = 'f(x) = ' + polyToString(conceptCoeffs);
+  document.getElementById('cDerivEq').textContent = polyToString(conceptDerivCoeffs);
+  resetConceptView();
+}
+function resetConceptView(){
+  const base = computeAutoViewFn(x=>polyEval(conceptCoeffs,x), -4, 4);
+  // [2단계] 1:1 축척은 그대로 두고, 기본 보기의 세로 범위만 점 P 주변 곡선(a±1.5)과 Q에 맞춰 좁힘
+  //        (기본 가로 범위 약 ±25~50 → 약 ±4~7). 점 P가 화면 밖으로 나가면 followConcept()가 화면을 밀어 준다.
+  const ys = [];
+  for (let x = concept.a-1.5; x <= concept.a+1.5+1e-9; x += 0.25) ys.push(polyEval(conceptCoeffs, x));
+  ys.push(polyEval(conceptCoeffs, concept.a + concept.h));
+  conceptView = focusViewY(base, ys);
+  redrawConceptChart();
+}
+/* [2단계] a 슬라이더로 P가 화면 밖에 나가면 축척은 유지한 채 화면만 밀어 줌 (드래그 이동 때는 적용 안 함) */
+/* [UX] 처음 값으로: 개념 탭의 a·h만 처음 값으로 (고른 함수·보기 위치는 그대로) */
+function resetConceptValues(){
+  concept.a = CONCEPT_INIT.a; concept.h = CONCEPT_INIT.h;
+  setPair('sliderCA','numCA', concept.a); setPair('sliderCH','numCH', concept.h);
+  followConcept(); redrawConceptChart();
+}
+function followConcept(){
+  conceptView = keepInView(conceptView, document.getElementById('conceptChart'), [{x:concept.a, y:polyEval(conceptCoeffs, concept.a)}]);
+}
+function redrawConceptChart(){
+  const a = concept.a, h = concept.h;
+  const fa = polyEval(conceptCoeffs, a);
+  const slope = polyEval(conceptDerivCoeffs, a);
+  const curves = [
+    { fn: x=>polyEval(conceptCoeffs,x), color:tok('--pz-f'), width:3.5, tag:'y = f(x)', tagColor:tok('--pz-sky-ink') },
+    { fn: x=> slope*(x-a)+fa, color:tok('--pz-ref'), width:3, dash:[9,7], tag:'접선', tagColor:tok('--pz-accent-ink') },
+  ];
+  const hNear0 = Math.abs(h) < 0.02;
+  let avgRate = null;
+  if (!hNear0){
+    const qx = a+h, qy = polyEval(conceptCoeffs, qx);
+    avgRate = (qy-fa)/h;
+    curves.push({ fn: x=> avgRate*(x-a)+fa, color:tok('--pz-butter-line'), width:3, tag:'할선', tagColor:tok('--pz-butter-ink'), marker:{x:qx,y:qy,label:'Q'} });
+  }
+  curves.push({ fn: ()=>NaN, color:tok('--pz-ink'), marker:{x:a,y:fa,label:'P'} });
+
+  drawLineChart(document.getElementById('conceptChart'), conceptView.xMin, conceptView.xMax, conceptView.yMin, conceptView.yMax, curves);
+
+  document.getElementById('cAvgRate').textContent = hNear0
+    ? `0/0 꼴 → 극한값 = ${fmtNum(slope)}`
+    : fmtNum(avgRate);
+  document.getElementById('cInstRate').textContent = fmtNum(slope);
+  const convergeEl = document.getElementById('cConverge');
+  if (hNear0){
+    convergeEl.textContent = `h → 0이면 (f(a+h)-f(a))/h 는 0/0 꼴이 되어 직접 대입할 수 없습니다. 그래서 이 값을 "h→0일 때의 극한값"으로 정의하며, 그 극한값이 바로 접선의 기울기 f'(a) = ${fmtNum(slope)} 입니다.`;
+  } else {
+    const diff = Math.abs(avgRate-slope);
+    if (diff < 0.15){ convergeEl.textContent = `거의 일치! |h|가 작아질수록 평균변화율이 극한값(순간변화율) ${fmtNum(slope)}에 가까워집니다.`; }
+    else { convergeEl.textContent = `현재 차이: ${fmtNum(diff)}. h를 0에 더 가깝게 움직여 극한값에 다가가는 걸 관찰해보세요.`; }
+  }
+
+  const k = fa - slope*a;
+  document.getElementById('cTangentEq').textContent = lineToString(slope,k);
+}
+setConceptFn(0);
+bindPair('sliderCA','numCA', v=>concept.a=v, ()=>{ followConcept(); redrawConceptChart(); });
+bindPair('sliderCH','numCH', v=>concept.h=v, redrawConceptChart);
+setPair('sliderCA','numCA', concept.a);
+setPair('sliderCH','numCH', concept.h);
+attachPanZoom('conceptChart', ()=>conceptView, v=>{conceptView=v;}, redrawConceptChart);
+
+/* ================= TAB 2: 기본형 ================= */
+let t2 = null;
+let t2View = null;
+let p2Solved = false;
+
+function genQuadratic(){ return [randInt(-3,3), randInt(-3,3), randChoice([-2,-1,1,2])]; }
+function genCubic(){ return [randInt(-3,3), randInt(-3,3), randInt(-2,2), randChoice([-1,1])]; }
+
+function genProblem2(){
+  const isCubic = Math.random() < 0.4;
+  const coeffs = isCubic ? genCubic() : genQuadratic();
+  const range = isCubic ? 2 : 3;
+  const a = randInt(-range, range);
+  const fa = polyEval(coeffs, a);
+  const dCoeffs = polyDeriv(coeffs);
+  const slope = polyEval(dCoeffs, a);
+  const k = fa - slope*a;
+  t2 = { coeffs, dCoeffs, a, fa, slope, k };
+  const dom = domainForPoints([a], 3.2);
+  t2View = focusViewY(computeAutoViewFn(x=>polyEval(coeffs,x), dom.xMin, dom.xMax), p2FocusYs(coeffs, a)); // [버그수정] 기본 보기 확대 ([2단계] P 주변 곡선 모양까지)
+  p2Solved = false;
+  renderProblem2();
+}
+function renderProblem2(){
+  document.getElementById('p2Eq').textContent = 'f(x) = ' + polyToString(t2.coeffs);
+  document.getElementById('p2Point').textContent = `접점: (${fmtNum(t2.a)}, ${fmtNum(t2.fa)})`;
+  document.getElementById('p2InputM').value = '';
+  document.getElementById('p2InputK').value = '';
+  document.getElementById('p2Feedback').innerHTML = '';
+  document.getElementById('p2Solution').style.display = 'none';
+  document.getElementById('p2SolBtn').textContent = '펼치기';
+  redrawP2Chart(null);
+}
+/* [2단계] 탭2 기본 보기: P의 y값만 넣으면 기울기가 큰 점에서 곡선이 세로 막대처럼 보여서,
+   P 양옆(x = a±0.5)의 곡선 높이도 함께 넣어 휘어진 모양이 보이게 한다. (1:1 축척은 그대로) */
+function p2FocusYs(c, a){ return [polyEval(c, a), polyEval(c, a-0.5), polyEval(c, a+0.5)]; }
+function resetP2View(){
+  const dom = domainForPoints([t2.a], 3.2);
+  t2View = focusViewY(computeAutoViewFn(x=>polyEval(t2.coeffs,x), dom.xMin, dom.xMax), p2FocusYs(t2.coeffs, t2.a)); // [버그수정] 기본 보기 확대 ([2단계] P 주변 곡선 모양까지)
+  refreshP2Chart();
+}
+let p2LastAttempt = null;
+function redrawP2Chart(correctLine, attemptLine){
+  const curves = [
+    { fn: x=>polyEval(t2.coeffs,x), color:tok('--pz-f'), width:3.5, tag:'y = f(x)', tagColor:tok('--pz-sky-ink') },
+  ];
+  curves.push({ fn: ()=>NaN, color:tok('--pz-point'), marker:{x:t2.a, y:t2.fa, label:'P', kind:'fixed', color:tok('--pz-point')} });
+  if (correctLine) curves.push({ fn: x=> correctLine.m*x+correctLine.k, color:tok('--pz-ref'), width:3, tag:'정답 접선 ✓', tagColor:tok('--pz-accent-ink') });
+  if (attemptLine) curves.push({ fn: x=> attemptLine.m*x+attemptLine.k, color:tok('--pz-lav-line'), width:3, dash:[3,6], tag:'입력한 직선 ✗', tagColor:tok('--pz-lav-ink') });
+  drawLineChart(document.getElementById('p2Chart'), t2View.xMin, t2View.xMax, t2View.yMin, t2View.yMax, curves);
+}
+function refreshP2Chart(){
+  redrawP2Chart(p2Solved ? {m:t2.slope,k:t2.k} : null, p2Solved ? p2LastAttempt : null);
+}
+function checkAnswer2(){
+  const m = Number(document.getElementById('p2InputM').value);
+  const k = Number(document.getElementById('p2InputK').value);
+  if (document.getElementById('p2InputM').value==='' || document.getElementById('p2InputK').value===''){
+    document.getElementById('p2Feedback').innerHTML = '<div class="feedback wrong">기울기와 y절편을 모두 입력해주세요.</div>';
+    return;
+  }
+  const mOk = Math.abs(m - t2.slope) < 0.05;
+  const kOk = Math.abs(k - t2.k) < 0.05;
+  p2Solved = true;
+  p2LastAttempt = { m, k };
+  const fb = document.getElementById('p2Feedback');
+  if (mOk && kOk){
+    p2LastAttempt = null; // [버그수정] 정답 후 그래프 이동·확대 시 입력 직선(분홍)이 다시 겹쳐 그려지던 문제
+    fb.innerHTML = `<div class="feedback correct">정답이에요! 접선의 방정식: ${lineToString(t2.slope,t2.k)}</div>`;
+    redrawP2Chart({m:t2.slope,k:t2.k}, null);
+    if (window.PastelUI) PastelUI.celebrate('2-4-1-기본형', '🎉 기본형 완료! 접선의 방정식을 구했어요');   // [2단계] 처음 정답 때 한 번만
+  } else {
+    let msg = mOk ? '기울기는 맞았어요. y절편을 다시 확인해보세요.' : (kOk ? 'y절편은 맞았어요. 기울기를 다시 확인해보세요.' : '기울기와 y절편을 다시 확인해보세요.');
+    fb.innerHTML = `<div class="feedback wrong">${msg} (보라 점선이 입력한 직선, 산호색 선이 정답)</div>`;
+    redrawP2Chart({m:t2.slope,k:t2.k}, {m,k});
+  }
+}
+function toggleSolution2(){
+  const el = document.getElementById('p2Solution');
+  const open = el.style.display === 'none';
+  el.style.display = open ? '' : 'none';
+  document.getElementById('p2SolBtn').textContent = open ? '접기' : '펼치기';
+  if (open){
+    el.innerHTML = `
+      <div class="stepItem"><span class="stepNum">1</span><span class="pz-term" data-tip="도함수" tabindex="0">도함수</span>를 구합니다: f'(x) = ${polyToString(t2.dCoeffs)}</div>
+      <div class="stepItem"><span class="stepNum">2</span>x = ${fmtNum(t2.a)} 를 대입해 접선의 기울기를 구합니다: f'(${fmtNum(t2.a)}) = ${fmtNum(t2.slope)}</div>
+      <div class="stepItem"><span class="stepNum">3</span>점 (${fmtNum(t2.a)}, ${fmtNum(t2.fa)})을 지나므로: ${pointSlopeString(t2.a, t2.fa, t2.slope)}</div>
+      <div class="stepItem"><span class="stepNum">4</span>정리하면 접선의 방정식: <b>${lineToString(t2.slope,t2.k)}</b></div>
+    `;
+  }
+}
+attachPanZoom('p2Chart', ()=>t2View, v=>{t2View=v;}, refreshP2Chart);
+genProblem2();
+
+/* ================= TAB 3: 평행조건 ================= */
+let t3 = null;
+let t3View = null;
+let t3State = { t: 0 };
+
+function genProblem3(){
+  const isCubic = Math.random() < 0.35;
+  let coeffs, m, sols;
+  if (!isCubic){
+    coeffs = genQuadratic();
+    const a = randInt(-3,3);
+    m = 2*coeffs[2]*a + coeffs[1];
+    sols = [a];
+  } else {
+    const A = randChoice([-1,1]);
+    let a,b;
+    do { a = randInt(-2,2); b = randInt(-2,2); } while (a===b || (a+b)%2!==0);
+    m = randInt(-4,4);
+    const B = -3*A*(a+b)/2;
+    const C = 3*A*a*b + m;
+    const D = randInt(-2,2);
+    coeffs = [D,C,B,A];
+    sols = [a,b].sort((x,y)=>x-y);
+  }
+  // [버그수정] 기준 직선이 접선 자체와 같아지면 '평행한 접선'이 성립하지 않으므로, 접선의 y절편과 다른 값으로 고른다
+  const tanKs = sols.map(s=> polyEval(coeffs,s) - m*s);
+  let n0;
+  do { n0 = randInt(-2,2); } while (tanKs.some(k=> Math.abs(k-n0) < 1e-9));
+  t3 = { coeffs, dCoeffs:polyDeriv(coeffs), m, n0, sols, found: new Array(sols.length).fill(false) };
+  const dom = domainForPoints(sols, 2.8);
+  setSliderRange('sliderP3T','numP3T', dom.xMin, dom.xMax);
+  // [버그수정] 이차함수 문제는 구간 가운데가 곧 정답이라 시작하자마자 '일치!'가 뜨던 문제 → 정답에서 떨어진 곳에서 시작
+  let t0 = Math.round((dom.xMin+dom.xMax)/2*10)/10;
+  if (sols.some(s=> Math.abs(t0-s) < 0.5)) t0 = Math.round((sols[0]-1.5)*10)/10;
+  t3State.t = t0;
+  t3View = focusViewY(computeAutoViewFn(x=>polyEval(coeffs,x), dom.xMin, dom.xMax), focusYs3(dom)); // [버그수정] 기본 보기 확대
+  renderProblem3();
+}
+function renderProblem3(){
+  document.getElementById('p3Eq').textContent = 'f(x) = ' + polyToString(t3.coeffs);
+  document.getElementById('p3RefLine').textContent = `기준 직선: ${lineToString(t3.m, t3.n0)}  (기울기 ${fmtNum(t3.m)})`;
+  document.getElementById('p3Feedback').innerHTML = '';
+  document.getElementById('p3Solution').style.display = 'none';
+  document.getElementById('p3SolBtn').textContent = '펼치기';
+  renderChecklist3();
+  setPair('sliderP3T','numP3T', t3State.t.toFixed(1));
+  redrawP3Chart();
+}
+function renderChecklist3(){
+  const el = document.getElementById('p3Checklist');
+  el.innerHTML = t3.sols.map((s,i)=>`<span class="checkItem ${t3.found[i]?'done':''}" id="p3Chk${i}">해 ${i+1} ${t3.found[i]?'✓':''}</span>`).join('');
+}
+function resetP3View(){
+  const dom = domainForPoints(t3.sols, 2.8);
+  t3View = focusViewY(computeAutoViewFn(x=>polyEval(t3.coeffs,x), dom.xMin, dom.xMax), focusYs3(dom)); // [버그수정] 기본 보기 확대
+  redrawP3Chart();
+}
+/* [버그수정] 탭3 기본 보기에 꼭 들어와야 할 y값: 각 접점, 그 x에서의 기준 직선, 시작 위치의 곡선 */
+function focusYs3(dom){
+  const c = t3 ? t3.coeffs : null;
+  if (!c) return [0];
+  const ys = [polyEval(c, t3State.t)];
+  t3.sols.forEach(s=>{ ys.push(polyEval(c,s), t3.m*s + t3.n0); });
+  return ys;
+}
+function redrawP3Chart(){
+  const t = t3State.t;
+  const ft = polyEval(t3.coeffs, t);
+  const slope = polyEval(t3.dCoeffs, t);
+  const curves = [
+    { fn: x=>polyEval(t3.coeffs,x), color:tok('--pz-f'), width:3.5, tag:'y = f(x)', tagColor:tok('--pz-sky-ink') },
+    { fn: x=> t3.m*x + t3.n0, color:tok('--pz-ref'), width:2.5, dash:[9,7], tag:'기준 직선', tagColor:tok('--pz-accent-ink') },
+    { fn: x=> slope*(x-t)+ft, color:tok('--pz-ref'), width:3.5, tag:'접선', tagColor:tok('--pz-accent-ink'), marker:{x:t,y:ft,label:'P'} },
+  ];
+  drawLineChart(document.getElementById('p3Chart'), t3View.xMin, t3View.xMax, t3View.yMin, t3View.yMax, curves);
+  const diff = Math.abs(slope - t3.m);
+  const el = document.getElementById('p3LiveCheck');
+  el.textContent = `현재 접선의 기울기: ${fmtNum(slope)}  (목표: ${fmtNum(t3.m)})` + (diff < 0.08 ? '  → 일치! ✨' : '');
+  el.className = 'feedback ' + (diff < 0.08 ? 'correct' : 'info');
+}
+function lockAnswer3(){
+  const t = t3State.t;
+  let matchedIdx = -1;
+  // [버그수정] 실시간 표시('일치!')와 같은 기준으로 판정 — 기울기가 아직 다른데도 정답 처리되던 문제
+  const slopeOk = Math.abs(polyEval(t3.dCoeffs, t) - t3.m) < 0.08;
+  t3.sols.forEach((s,i)=>{ if (slopeOk && Math.abs(t-s) < 0.1) matchedIdx = i; });
+  const fb = document.getElementById('p3Feedback');
+  if (matchedIdx >= 0){
+    t3.found[matchedIdx] = true;
+    renderChecklist3();
+    const allFound = t3.found.every(f=>f);
+    fb.innerHTML = allFound
+      ? `<div class="feedback correct">모든 해를 찾았어요! 🎉</div>`
+      : `<div class="feedback correct">정답 하나를 찾았어요! 나머지 해도 찾아보세요.</div>`;
+    if (allFound && window.PastelUI) PastelUI.celebrate('2-4-1-평행조건', '🎉 평행조건 완료! 모든 해를 찾았어요');   // [2단계]
+  } else {
+    fb.innerHTML = `<div class="feedback wrong">아직 목표 기울기와 일치하지 않아요. 슬라이더를 조금 더 움직여보세요.</div>`;
+  }
+}
+function toggleSolution3(){
+  const el = document.getElementById('p3Solution');
+  const open = el.style.display === 'none';
+  el.style.display = open ? '' : 'none';
+  document.getElementById('p3SolBtn').textContent = open ? '접기' : '펼치기';
+  if (open){
+    const eqStr = t3.dCoeffs.length===2
+      ? `${polyToString(t3.dCoeffs)} = ${fmtNum(t3.m)}`
+      : `${polyToString(t3.dCoeffs)} = ${fmtNum(t3.m)}`;
+    let stepsHtml = `
+      <div class="stepItem"><span class="stepNum">1</span><span class="pz-term" data-tip="도함수" tabindex="0">도함수</span>를 구합니다: f'(x) = ${polyToString(t3.dCoeffs)}</div>
+      <div class="stepItem"><span class="stepNum">2</span>접선의 기울기가 ${fmtNum(t3.m)}이어야 하므로 방정식을 세웁니다: ${eqStr}</div>
+      <div class="stepItem"><span class="stepNum">3</span>방정식을 풀면 x = ${t3.sols.map(fmtNum).join(', ')}</div>
+    `;
+    t3.sols.forEach((s,i)=>{
+      const fs = polyEval(t3.coeffs, s);
+      const k = fs - t3.m*s;
+      stepsHtml += `<div class="stepItem"><span class="stepNum">${4+i}</span>x = ${fmtNum(s)}일 때 접점 (${fmtNum(s)}, ${fmtNum(fs)}) → 접선: <b>${lineToString(t3.m,k)}</b></div>`;
+    });
+    document.getElementById('p3Solution').innerHTML = stepsHtml;
+  }
+}
+bindPair('sliderP3T','numP3T', v=>t3State.t=v, ()=>{   // [2단계] 점 P가 화면 밖이면 화면만 밀어 줌
+  t3View = keepInView(t3View, document.getElementById('p3Chart'), [{x:t3State.t, y:polyEval(t3.coeffs, t3State.t)}]);
+  redrawP3Chart();
+});
+attachPanZoom('p3Chart', ()=>t3View, v=>{t3View=v;}, redrawP3Chart);
+genProblem3();
+
+/* ================= TAB 4: 외부점 ================= */
+let t4 = null;
+let t4View = null;
+let t4State = { t: 0 };
+
+function genProblem4(){
+  const coeffs = genQuadratic();
+  const C = coeffs[0], B = coeffs[1], A = coeffs[2];
+  // delta 크기를 2로 고정: Q와 곡선 사이의 수직 거리는 항상 |A|*delta^2 (>=4) 이므로
+  // 어떤 계수 조합에서도 Q가 곡선에서 시각적으로 뚜렷하게 떨어져 보인다.
+  const a = randInt(-1,1);
+  const delta = randChoice([-2,2]);
+  const qx = a + delta;
+  const t2sol = a + 2*delta;
+  const fa = polyEval(coeffs, a);
+  const slope = 2*A*a + B;
+  const k = fa - slope*a;
+  const qy = slope*qx + k;
+  const sols = [a, t2sol].sort((x,y)=>x-y);
+  t4 = { coeffs, dCoeffs: polyDeriv(coeffs), Q:{x:qx,y:qy}, sols, found: new Array(2).fill(false) };
+  const dom = domainForPoints([a, qx, t2sol], 1.8);
+  const baseView = computeAutoViewFn(x=>polyEval(coeffs,x), dom.xMin, dom.xMax);
+  // [버그수정] 기본 보기 확대: Q, 두 접점, 시작 위치(=Q의 x좌표)의 곡선
+  t4View = focusViewY(extendViewToY(baseView, [qy]), [qy, polyEval(coeffs,a), polyEval(coeffs,t2sol), polyEval(coeffs,qx)]);
+  setSliderRange('sliderP4T','numP4T', dom.xMin, dom.xMax);
+  t4State.t = (dom.xMin+dom.xMax)/2;
+  renderProblem4();
+}
+function renderProblem4(){
+  document.getElementById('p4Eq').textContent = 'f(x) = ' + polyToString(t4.coeffs);
+  document.getElementById('p4Point').textContent = `외부의 점 Q = (${fmtNum(t4.Q.x)}, ${fmtNum(t4.Q.y)})`;
+  document.getElementById('p4Feedback').innerHTML = '';
+  document.getElementById('p4Solution').style.display = 'none';
+  document.getElementById('p4SolBtn').textContent = '펼치기';
+  renderChecklist4();
+  setPair('sliderP4T','numP4T', t4State.t.toFixed(1));
+  redrawP4Chart();
+}
+function renderChecklist4(){
+  const el = document.getElementById('p4Checklist');
+  el.innerHTML = t4.sols.map((s,i)=>`<span class="checkItem ${t4.found[i]?'done':''}">접선 ${i+1} ${t4.found[i]?'✓':''}</span>`).join('');
+}
+function resetP4View(){
+  const dom = domainForPoints([t4.sols[0], t4.sols[1], t4.Q.x], 1.8);
+  const baseView = computeAutoViewFn(x=>polyEval(t4.coeffs,x), dom.xMin, dom.xMax);
+  t4View = focusViewY(extendViewToY(baseView, [t4.Q.y]), [t4.Q.y, ...t4.sols.map(s=>polyEval(t4.coeffs,s)), polyEval(t4.coeffs,t4State.t)]); // [버그수정] 기본 보기 확대
+  redrawP4Chart();
+}
+function redrawP4Chart(){
+  const t = t4State.t;
+  const ft = polyEval(t4.coeffs, t);
+  const slope = polyEval(t4.dCoeffs, t);
+  const k = ft - slope*t;
+  const curves = [
+    { fn: x=>polyEval(t4.coeffs,x), color:tok('--pz-f'), width:3.5, tag:'y = f(x)', tagColor:tok('--pz-sky-ink') },
+    { fn: x=> slope*x+k, color:tok('--pz-ref'), width:3.5, tag:'접선', tagColor:tok('--pz-accent-ink'), marker:{x:t,y:ft,label:'P'} },
+    { fn: ()=>NaN, color:tok('--pz-ink2'), marker:{x:t4.Q.x, y:t4.Q.y, label:'Q', kind:'fixed', color:tok('--pz-ink2')} },
+  ];
+  drawLineChart(document.getElementById('p4Chart'), t4View.xMin, t4View.xMax, t4View.yMin, t4View.yMax, curves);
+  const lineAtQ = slope*t4.Q.x + k;
+  const diff = Math.abs(lineAtQ - t4.Q.y);
+  const el = document.getElementById('p4LiveCheck');
+  el.textContent = `현재 접선이 Q에서 벗어난 정도: ${fmtNum(diff)}` + (diff < 0.15 ? '  → Q를 지나요! ✨' : '');
+  el.className = 'feedback ' + (diff < 0.15 ? 'correct' : 'info');
+}
+function lockAnswer4(){
+  const t = t4State.t;
+  let matchedIdx = -1;
+  // [버그수정] 실시간 표시('Q를 지나요!')와 같은 기준으로 판정 — 접선이 아직 Q를 지나지 않는데도 정답 처리되던 문제
+  const ft = polyEval(t4.coeffs, t), sl = polyEval(t4.dCoeffs, t);
+  const passQ = Math.abs(sl*(t4.Q.x - t) + ft - t4.Q.y) < 0.15;
+  t4.sols.forEach((s,i)=>{ if (passQ && Math.abs(t-s) < 0.12) matchedIdx = i; });
+  const fb = document.getElementById('p4Feedback');
+  if (matchedIdx >= 0){
+    t4.found[matchedIdx] = true;
+    renderChecklist4();
+    const allFound = t4.found.every(f=>f);
+    fb.innerHTML = allFound
+      ? `<div class="feedback correct">두 접선을 모두 찾았어요! 🎉</div>`
+      : `<div class="feedback correct">접선 하나를 찾았어요! 나머지 하나도 찾아보세요.</div>`;
+    if (allFound && window.PastelUI) PastelUI.celebrate('2-4-1-외부점', '🎉 외부점 완료! 두 접선을 모두 찾았어요');   // [2단계]
+  } else {
+    fb.innerHTML = `<div class="feedback wrong">아직 Q를 지나지 않아요. 슬라이더를 조금 더 움직여보세요.</div>`;
+  }
+}
+function toggleSolution4(){
+  const el = document.getElementById('p4Solution');
+  const open = el.style.display === 'none';
+  el.style.display = open ? '' : 'none';
+  document.getElementById('p4SolBtn').textContent = open ? '접기' : '펼치기';
+  if (open){
+    const A = t4.coeffs[2], B = t4.coeffs[1], C = t4.coeffs[0];
+    const qx = t4.Q.x, qy = t4.Q.y;
+    let stepsHtml = `
+      <div class="stepItem"><span class="stepNum">1</span>접점을 (t, f(t))로 놓습니다.</div>
+      <div class="stepItem"><span class="stepNum">2</span>접선의 방정식: y = f'(t)(x - t) + f(t)</div>
+      <div class="stepItem"><span class="stepNum">3</span>이 직선이 Q(${fmtNum(qx)}, ${fmtNum(qy)})를 지나므로 대입하면: ${fmtNum(qy)} - f(t) = f'(t)(${fmtNum(qx)} - t)</div>
+      <div class="stepItem"><span class="stepNum">4</span>정리하면 t에 대한 이차방정식이 되고, 풀면 t = ${t4.sols.map(fmtNum).join(', ')}</div>
+    `;
+    t4.sols.forEach((s,i)=>{
+      const fs = polyEval(t4.coeffs, s);
+      const slope = polyEval(t4.dCoeffs, s);
+      const k = fs - slope*s;
+      stepsHtml += `<div class="stepItem"><span class="stepNum">${5+i}</span>t = ${fmtNum(s)} 일 때 접선: <b>${lineToString(slope,k)}</b></div>`;
+    });
+    document.getElementById('p4Solution').innerHTML = stepsHtml;
+  }
+}
+bindPair('sliderP4T','numP4T', v=>t4State.t=v, ()=>{   // [2단계] 점 P가 화면 밖이면 화면만 밀어 줌
+  t4View = keepInView(t4View, document.getElementById('p4Chart'), [{x:t4State.t, y:polyEval(t4.coeffs, t4State.t)}]);
+  redrawP4Chart();
+});
+attachPanZoom('p4Chart', ()=>t4View, v=>{t4View=v;}, redrawP4Chart);
+genProblem4();
+
+/* ================= TAB 5: 공통접선 (심화) ================= */
+let t5 = null;
+let t5View = null;
+let t5State = { t1: 0, t2: 0 };
+
+function genProblem5(){
+  const m = randInt(-3,3);
+  const k = randInt(-3,3);
+  let a,b;
+  do { a = randInt(-3,3); b = randInt(-3,3); } while (a===b);
+  const r = randChoice([-1,1]);
+  const s = randChoice([-1,1]);
+  const fCoeffs = [ k + r*a*a, m - 2*r*a, r ];
+  const gCoeffs = [ k + s*b*b, m - 2*s*b, s ];
+  t5 = { fCoeffs, gCoeffs, dF:polyDeriv(fCoeffs), dG:polyDeriv(gCoeffs), a, b, m, k, found: [] }; // found: [2차 수정] 찾은 공통접선 기록
+  const dom = domainForPoints([a,b], 2.8);
+  const v1 = computeAutoViewFn(x=>polyEval(fCoeffs,x), dom.xMin, dom.xMax);
+  const v2 = computeAutoViewFn(x=>polyEval(gCoeffs,x), dom.xMin, dom.xMax);
+  t5View = focusViewY({ xMin:dom.xMin, xMax:dom.xMax, yMin: Math.min(v1.yMin,v2.yMin), yMax: Math.max(v1.yMax,v2.yMax) }, focusYs5()); // [버그수정] 기본 보기 확대
+  setSliderRange('sliderP5T1','numP5T1', dom.xMin, dom.xMax);
+  setSliderRange('sliderP5T2','numP5T2', dom.xMin, dom.xMax);
+  const mid = (dom.xMin+dom.xMax)/2;
+  t5State = { t1: mid, t2: mid };
+  renderProblem5();
+}
+function renderProblem5(){
+  document.getElementById('p5FEq').textContent = polyToString(t5.fCoeffs);
+  document.getElementById('p5GEq').textContent = polyToString(t5.gCoeffs);
+  document.getElementById('p5Feedback').innerHTML = '';
+  document.getElementById('p5Solution').style.display = 'none';
+  document.getElementById('p5SolBtn').textContent = '펼치기';
+  setPair('sliderP5T1','numP5T1', t5State.t1.toFixed(1));
+  setPair('sliderP5T2','numP5T2', t5State.t2.toFixed(1));
+  redrawP5Chart();
+}
+function resetP5View(){
+  const dom = domainForPoints([t5.a,t5.b], 2.8);
+  const v1 = computeAutoViewFn(x=>polyEval(t5.fCoeffs,x), dom.xMin, dom.xMax);
+  const v2 = computeAutoViewFn(x=>polyEval(t5.gCoeffs,x), dom.xMin, dom.xMax);
+  t5View = focusViewY({ xMin:dom.xMin, xMax:dom.xMax, yMin: Math.min(v1.yMin,v2.yMin), yMax: Math.max(v1.yMax,v2.yMax) }, focusYs5()); // [버그수정] 기본 보기 확대
+  redrawP5Chart();
+}
+/* [버그수정] 탭5 기본 보기에 들어와야 할 y값: 두 곡선의 x=a, x=b 값(공통접선의 접점들), 구간 가운데 값 */
+function focusYs5(){
+  const xs = [t5.a, t5.b, (t5.a+t5.b)/2];
+  const ys = [];
+  xs.forEach(x=> ys.push(polyEval(t5.fCoeffs,x), polyEval(t5.gCoeffs,x)));
+  return ys;
+}
+/* [버그수정] 두 포물선의 x²의 계수 부호가 반대(r = -s)이면 공통접선이 2개 존재한다:
+   (t₁,t₂) = (a,b) 와 (b,a). 같으면(r = s) 1개뿐이다. */
+function commonTangents5(){
+  const list = [{ t1:t5.a, t2:t5.b }];
+  if (t5.fCoeffs[2] === -t5.gCoeffs[2]) list.push({ t1:t5.b, t2:t5.a });
+  return list.map(p=>{
+    const m = polyEval(t5.dF, p.t1);
+    return { ...p, m, k: polyEval(t5.fCoeffs, p.t1) - m*p.t1 };
+  });
+}
+function redrawP5Chart(){
+  const t1 = t5State.t1, t2 = t5State.t2;
+  const f1 = polyEval(t5.fCoeffs, t1), slopeF = polyEval(t5.dF, t1), kF = f1 - slopeF*t1;
+  const g2 = polyEval(t5.gCoeffs, t2), slopeG = polyEval(t5.dG, t2), kG = g2 - slopeG*t2;
+  // [2단계] 그래프 색: f = --pz-f, g = --pz-g, 두 접선 = --pz-ref(점선 모양과 이름표로 구분).
+  //        두 접선이 겹치면(아래 판정과 같은 기준) 하나의 굵은 실선 '공통접선 ✓'으로 그린다.
+  const sameLine = Math.abs(slopeF - slopeG) < 0.08 && Math.abs(kF - kG) < 0.08;
+  const ref = tok('--pz-ref'), refInk = tok('--pz-accent-ink');
+  const curves = [
+    { fn: x=>polyEval(t5.fCoeffs,x), color:tok('--pz-f'), width:3.5, tag:'y = f(x)', tagColor:tok('--pz-sky-ink') },
+    { fn: x=>polyEval(t5.gCoeffs,x), color:tok('--pz-g'), width:3.5, tag:'y = g(x)', tagColor:tok('--pz-lav-ink') },
+  ];
+  if (sameLine) curves.push({ fn: x=> slopeF*x+kF, color:ref, width:4, tag:'공통접선 ✓', tagColor:refInk });
+  else curves.push(
+    { fn: x=> slopeF*(x-t1)+f1, color:ref, width:3, dash:[10,7], tag:'f의 접선', tagColor:refInk },
+    { fn: x=> slopeG*(x-t2)+g2, color:ref, width:3, dash:[2,6], tag:'g의 접선', tagColor:refInk });
+  curves.push({ fn: ()=>NaN, color:ref, marker:{x:t1,y:f1,label:'t₁'} }, { fn: ()=>NaN, color:ref, marker:{x:t2,y:g2,label:'t₂', labelPos:'dr'} });
+  drawLineChart(document.getElementById('p5Chart'), t5View.xMin, t5View.xMax, t5View.yMin, t5View.yMax, curves);
+
+  document.getElementById('p5SlopeF').textContent = fmtNum(slopeF);
+  document.getElementById('p5SlopeG').textContent = fmtNum(slopeG);
+  document.getElementById('p5InterceptF').textContent = fmtNum(kF);
+  document.getElementById('p5InterceptG').textContent = fmtNum(kG);
+
+  const slopeMatch = Math.abs(slopeF - slopeG) < 0.08;
+  const interceptMatch = Math.abs(kF - kG) < 0.08;
+  const el = document.getElementById('p5LiveCheck');
+  // [2차 수정] 공통접선이 2개인 문제: 하나를 찾으면 완료로 인정하되 "하나 더" 안내, 둘 다 찾으면 축하
+  const tans = commonTangents5();
+  const foundEqs = ()=> tans.filter((c,i)=>t5.found[i]).map(c=>lineToString(c.m, c.k)).join(',  ');
+  if (slopeMatch && interceptMatch){
+    tans.forEach((c,i)=>{ if (Math.abs(slopeF-c.m) < 0.08 && Math.abs(kF-c.k) < 0.08) t5.found[i] = true; });
+    el.textContent = '두 접선이 완전히 일치해요! 공통접선을 찾았어요 ✨';
+    el.className = 'feedback correct';
+    let html = `<div class="feedback correct">공통접선: ${lineToString(slopeF, kF)}</div>`;
+    if (tans.length === 2){
+      const nFound = t5.found.filter(Boolean).length;
+      html += nFound === 2
+        ? `<div class="feedback correct">공통접선 2개를 모두 찾았어요! 🎉 (${foundEqs()})</div>`
+        : `<div class="feedback info">공통접선이 하나 더 있어요! 찾아볼까요?</div>`;
+    }
+    document.getElementById('p5Feedback').innerHTML = html;
+    // [2단계] 탭 완료 축하: 공통접선이 1개인 문제는 찾았을 때, 2개인 문제는 2개를 모두 찾았을 때 (페이지당 한 번)
+    if (window.PastelUI && (tans.length === 1 || t5.found.filter(Boolean).length === 2))
+      PastelUI.celebrate('2-4-1-공통접선', tans.length === 2 ? '🎉 공통접선 2개를 모두 찾았어요!' : '🎉 공통접선 완료!');
+  } else {
+    let msg = '기울기 ' + (slopeMatch?'일치':'불일치') + ' · y절편 ' + (interceptMatch?'일치':'불일치');
+    el.textContent = msg + ' — 두 슬라이더를 조절해서 둘 다 일치시켜보세요.';
+    el.className = 'feedback info';
+    // [2차 수정] 하나를 찾은 뒤 슬라이더를 움직여도 안내·축하 문구는 남겨 둔다
+    const nFound = t5.found.filter(Boolean).length;
+    let html = '';
+    if (tans.length === 2 && nFound === 1) html = `<div class="feedback info">찾은 공통접선: ${foundEqs()} — 공통접선이 하나 더 있어요! 찾아볼까요?</div>`;
+    else if (tans.length === 2 && nFound === 2) html = `<div class="feedback correct">공통접선 2개를 모두 찾았어요! 🎉 (${foundEqs()})</div>`;
+    document.getElementById('p5Feedback').innerHTML = html;
+  }
+}
+function toggleSolution5(){
+  const el = document.getElementById('p5Solution');
+  const open = el.style.display === 'none';
+  el.style.display = open ? '' : 'none';
+  document.getElementById('p5SolBtn').textContent = open ? '접기' : '펼치기';
+  if (open){
+    // [버그수정] 공통접선이 2개인 문제(두 포물선의 볼록한 방향이 반대)에서 1개만 제시하던 문제
+    const tans = commonTangents5();
+    const whenStr = tans.map(p=>`t₁ = ${fmtNum(p.t1)}, t₂ = ${fmtNum(p.t2)}`).join('  또는  ');
+    const eqStr = tans.map(p=>`<b>${lineToString(p.m, p.k)}</b>`).join(',  ');
+    el.innerHTML = `
+      <div class="stepItem"><span class="stepNum">1</span>f 위의 점 (t₁, f(t₁))에서의 <span class="pz-term" data-tip="접선" tabindex="0">접선</span>: y = f'(t₁)(x - t₁) + f(t₁)</div>
+      <div class="stepItem"><span class="stepNum">2</span>g 위의 점 (t₂, g(t₂))에서의 접선: y = g'(t₂)(x - t₂) + g(t₂)</div>
+      <div class="stepItem"><span class="stepNum">3</span>두 접선이 같은 직선이 되려면 기울기와 y절편이 각각 같아야 하므로 연립방정식을 세웁니다.</div>
+      <div class="stepItem"><span class="stepNum">4</span>이 문제에서는 ${whenStr}일 때 성립합니다.${tans.length===2 ? ' (공통접선이 2개입니다)' : ''}</div>
+      <div class="stepItem"><span class="stepNum">5</span>공통접선의 방정식: ${eqStr}</div>
+    `;
+  }
+}
+// [2단계] 접점 t₁, t₂가 화면 밖이면 축척은 그대로 두고 화면만 밀어 줌
+function followP5(){
+  t5View = keepInView(t5View, document.getElementById('p5Chart'),
+    [{x:t5State.t1, y:polyEval(t5.fCoeffs, t5State.t1)}, {x:t5State.t2, y:polyEval(t5.gCoeffs, t5State.t2)}]);
+}
+bindPair('sliderP5T1','numP5T1', v=>t5State.t1=v, ()=>{ followP5(); redrawP5Chart(); });
+bindPair('sliderP5T2','numP5T2', v=>t5State.t2=v, ()=>{ followP5(); redrawP5Chart(); });
+attachPanZoom('p5Chart', ()=>t5View, v=>{t5View=v;}, redrawP5Chart);
+genProblem5();
+
+/* ================= [2단계] 반응형: 1100px 이상은 CSS 그리드가 [조작 | 그래프(sticky)] 2단으로 바꾼다.
+   여기서는 화면 폭·글자 크기(theme가 resize 이벤트를 보냄)가 바뀔 때 그래프 높이를 다시 맞추고 다시 그린다. */
+(function responsiveLayout(){
+  const wrap = document.querySelector('.wrap');
+  let timer = null;
+  const refresh = ()=> redrawTab(currentTab);
+  requestAnimationFrame(refresh);
+  if (typeof ResizeObserver === 'function'){
+    let lastW = 0;
+    new ResizeObserver(entries=>{
+      const w = entries[0].contentRect.width;
+      if (Math.abs(w - lastW) < 2) return;
+      lastW = w;
+      clearTimeout(timer); timer = setTimeout(refresh, 90);
+    }).observe(wrap);
+  }
+  window.addEventListener('resize', ()=>{ clearTimeout(timer); timer = setTimeout(refresh, 120); });
+})();
+</script>
+</body>
+</html>

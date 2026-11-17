@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>원래 함수를 찾아라 · 부정적분 탐구실</title>
+<style>
+/* [2단계 디자인] 공통 테마(복숭아 하늘) 적용. 글꼴·바탕은 테마(PZ 블록)가 정한다. */
+/* 앱 고유 변수 → 테마 토큰 연결 (하드코딩 색 금지) */
+:root{
+  --bg:var(--pz-bg); --panel:var(--pz-panel); --panelSoft:var(--pz-soft); --border:var(--pz-line); --borderSoft:var(--pz-line);
+  --textPrimary:var(--pz-ink); --textMuted:var(--pz-muted); --textFaint:var(--pz-muted);
+  --accent:var(--pz-accent-btn); --accentSoft:var(--pz-accent-soft); --accentLine:var(--pz-line2);
+  --good:var(--pz-ok); --goodSoft:var(--pz-ok-soft); --warn:var(--pz-butter-line); --warnSoft:var(--pz-warn-soft);
+}
+*{box-sizing:border-box}
+body{margin:0;line-height:1.6;-webkit-text-size-adjust:100%}
+/* [2단계] 상단 바가 단원·제목을 보여 주므로 앱 제목(h1)은 지우고 한 줄 소개만 */
+.tabs{margin-bottom:16px}
+.tabBtn{white-space:nowrap}
+.tabBtn.done::after{content:' ✓'}
+.card{background:var(--pz-panel);border:2px solid var(--pz-line);border-radius:var(--pz-r-lg);padding:18px 20px;margin-bottom:16px;box-shadow:var(--pz-shadow)}
+.cardSoft{background:var(--pz-soft);border-radius:var(--pz-r-md);padding:14px 18px;margin-bottom:16px;font-size:15.5px}
+.page{display:inline-block;font-size:14px;font-weight:700;color:var(--pz-accent-ink);background:var(--pz-accent-soft);border-radius:var(--pz-r-pill);padding:5px 13px;margin-bottom:10px}
+h2{font-family:var(--pz-font-title);font-weight:400;font-size:22px;margin:0 0 8px;color:var(--pz-ink);line-height:1.4}
+h3{font-family:var(--pz-font-title);font-weight:400;font-size:19px;margin:0 0 10px;color:var(--pz-ink)}
+p{margin:0 0 8px;font-size:15.5px}
+.muted{color:var(--pz-muted);font-size:14.5px}
+.mono{font-family:var(--pz-mono)}
+.math{font-family:var(--pz-mono);font-weight:600;white-space:nowrap}
+.fr{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.78em;line-height:1.05;margin:0 1px}
+.fr>span:first-child{border-bottom:1.3px solid currentColor;padding:0 2px}
+sup{font-size:.7em}
+.section{display:none}
+.section.show{display:block}
+/* 스플릿 뷰: 1100px 이상에서 [소개·조작 | 그래프(sticky)] (17개 앱 공통 기준) */
+.split{display:grid;grid-template-columns:minmax(0,1fr);gap:0 20px;grid-template-areas:"intro" "graph" "controls"}
+.intro{grid-area:intro}.graphCol{grid-area:graph;min-width:0}.controls{grid-area:controls;min-width:0}
+@media (min-width:1100px){
+  .split{grid-template-columns:minmax(330px,1fr) minmax(0,1.35fr);grid-template-areas:"intro graph" "controls graph";grid-template-rows:auto 1fr}
+  .graphCol{position:sticky;top:calc(var(--pz-topbar-h) + 12px);align-self:start}
+}
+.graphCard{padding:14px 16px 10px}
+.plane{width:100%;position:relative;border-radius:var(--pz-r-md);overflow:hidden;background:var(--pz-panel)}
+.plane canvas{display:block;width:100%;margin:0 auto;touch-action:pan-y;cursor:ew-resize}
+.plane.tap canvas{cursor:crosshair}
+.planeCap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 10px;font-size:13.5px;color:var(--pz-muted);margin:6px 2px 10px}
+.planeCap:last-child{margin-bottom:2px}
+.sliderRow{display:flex;align-items:center;gap:12px;margin:8px 0 12px}
+.sliderRow label{flex:0 0 auto;font-weight:600;font-size:15px;min-width:72px;color:var(--pz-ink2)}
+input[type=range]{flex:1;min-width:0}
+.miniInput{width:80px;padding:9px 6px;text-align:center}   /* 테두리·모서리·글꼴·포커스는 theme.css */
+/* 버튼 모양은 theme.css의 .pz-btn(-primary/-soft/-ghost). 여기는 터치 크기·간격만 */
+.btn{min-height:44px}
+.btn.pz-btn-primary{margin-bottom:5px}
+.btn.small{font-size:15px;padding:8px 14px;min-height:40px}
+.btnRow{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 12px}
+.chip{border:2px solid var(--pz-line);background:var(--pz-panel);border-radius:var(--pz-r-pill);padding:7px 14px;font-size:15px;cursor:pointer;font-family:inherit;color:var(--pz-ink2);min-height:40px;font-weight:600}
+.chip .pg{font-size:13px;color:var(--pz-muted);margin-left:5px;font-weight:500}
+.chip.on{background:var(--pz-accent-soft);border-color:var(--pz-accent);color:var(--pz-accent-ink);font-weight:700}
+.target{background:var(--pz-soft);border-radius:var(--pz-r-md);padding:11px 15px;margin:8px 0 12px;font-size:15.5px}
+.target b{font-family:var(--pz-mono)}
+.cands{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cand{border:2px solid var(--pz-line);border-radius:var(--pz-r-md);padding:10px 12px;cursor:pointer;background:var(--pz-panel);user-select:none;-webkit-user-select:none;position:relative}
+.cand .nm{font-family:var(--pz-mono);font-weight:700;font-size:18px}
+.cand .dot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:7px;vertical-align:middle}
+.cand .sl{font-size:14px;color:var(--pz-muted)}
+.cand .sl b{font-family:var(--pz-mono);color:var(--pz-ink);font-size:16px}
+.cand .pick{position:absolute;top:8px;right:10px;font-size:13px;font-weight:700;color:var(--pz-muted)}
+.cand.sel{border-color:var(--pz-accent);background:var(--pz-accent-soft)}
+.cand.sel .pick{color:var(--pz-accent-ink)}
+/* 피드백 = .pz-feedback 모양 (민트/버터), 색+기호 */
+.feedback{border-radius:var(--pz-r-md);padding:12px 14px;margin-top:12px;font-size:15.5px;font-weight:600;line-height:1.55;display:none}
+.feedback.show{display:block}
+.feedback.good{background:var(--pz-ok-soft);color:var(--pz-ok-ink)}
+.feedback.warn{background:var(--pz-warn-soft);color:var(--pz-warn-ink)}
+.feedback.good::before{content:"✓ ";font-weight:800}
+#fb1.warn::before{content:"✗ ";font-weight:800}
+#fb3.warn::before{content:"↕ ";font-weight:800}
+.reveal{display:none}
+.reveal.show{display:block;animation:pop .35s ease}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.formula{font-size:15.5px;margin:6px 0}
+.formula .math{font-size:17px}
+.readout{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.readout div{background:var(--pz-soft);border-radius:var(--pz-r-sm);padding:8px 12px;font-size:14px;color:var(--pz-muted)}
+.readout b{display:block;font-family:var(--pz-mono);font-size:19px;color:var(--pz-ink)}
+.check{display:flex;gap:10px;align-items:flex-start;padding:7px 0;font-size:15.5px;cursor:pointer}
+.check input{width:22px;height:22px;flex:0 0 auto;margin-top:2px;accent-color:var(--pz-accent-btn)}
+.pairs{width:100%;border-collapse:collapse;font-size:15px}
+.pairs td{padding:7px 6px;border-bottom:2px dashed var(--pz-line)}
+.pairs td:first-child{color:var(--pz-muted);font-size:13.5px;width:1%;white-space:nowrap;padding-right:12px}
+.pairs .q{color:var(--pz-muted)}
+.stepper{display:inline-flex;align-items:center;gap:4px}
+.stepper button{width:42px;height:42px;border-radius:var(--pz-r-input);border:0;background:var(--pz-panel);box-shadow:0 0 0 2px var(--pz-line) inset;font-size:20px;cursor:pointer;color:var(--pz-accent-ink);font-weight:700}
+.stepper span{min-width:40px;text-align:center;font-family:var(--pz-mono);font-weight:700;font-size:18px}
+.ptRow{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:6px 0;font-size:15.5px}
+.myCard{border:2px dashed var(--pz-line2);border-radius:var(--pz-r-md);padding:14px 16px;background:var(--pz-panel)}
+.pipe{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:8px 0 12px}
+.box{border:2px solid var(--pz-line);border-radius:var(--pz-r-sm);padding:8px 12px;background:var(--pz-panel);font-family:var(--pz-mono);font-weight:600;font-size:16px;min-width:52px;text-align:center}
+.arrow{font-size:13px;color:var(--pz-muted);text-align:center;line-height:1.2}
+.arrow::after{content:'→';display:block;font-size:18px;color:var(--pz-accent-ink)}
+.pipe .hid{visibility:hidden}
+.box.ok{border-color:var(--pz-ok);background:var(--pz-ok-soft)}
+.box.huh{border-color:var(--pz-butter-line);background:var(--pz-warn-soft)}
+textarea,.nameIn{width:100%;font-family:inherit;font-size:16px;border:2px solid var(--pz-line);border-radius:var(--pz-r-input);padding:12px;color:var(--pz-ink);background:var(--pz-panel)}
+textarea:focus,.nameIn:focus{outline:none;border-color:var(--pz-accent);box-shadow:0 0 0 3px var(--pz-accent-soft)}
+textarea{min-height:110px;resize:vertical}
+.counter{font-size:14px;color:var(--pz-muted);margin-top:4px}
+.question{font-size:18px;font-weight:700;line-height:1.55;margin:4px 0 10px}
+details{margin-top:6px}
+summary{cursor:pointer;font-weight:700;color:var(--pz-accent-ink);font-size:15px;padding:4px 0}
+.tbl{width:100%;border-collapse:collapse;font-size:14.5px;margin-top:8px}
+.tbl th,.tbl td{border-bottom:2px dashed var(--pz-line);padding:8px 6px;text-align:left;vertical-align:top}
+.tbl th{color:var(--pz-muted);font-weight:600;font-size:13.5px}
+.toast{position:fixed;left:50%;bottom:86px;transform:translate(-50%,10px);background:var(--pz-panel);color:var(--pz-ink);border:2px solid var(--pz-line);padding:11px 20px;border-radius:var(--pz-r-pill);font:700 15px/1.4 var(--pz-font);box-shadow:var(--pz-shadow);opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:1940;max-width:calc(100vw - 32px);text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.footer{text-align:center;font-size:13px;color:var(--pz-muted);margin-top:28px}
+@media (max-width:520px){.cands{grid-template-columns:1fr}}
+</style>
+<!-- PZ:HEAD -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../shared/theme.css">
+<script type="application/json" id="pz-meta">{"slug": "3-1", "unit": "3-1", "title": "부정적분의 뜻", "group": null, "home": "../index.html", "guide": "../guides/3-1.html"}</script>
+<script id="pz-ui" src="../shared/ui.js"></script>
+<!-- /PZ:HEAD -->
+</head>
+<body>
+<div class="wrap pz-wrap">
+<!-- [2단계] 상단 바가 단원·제목을 보여 주므로 앱 제목(h1)은 지우고 한 줄 소개만 남김. 탭 이름의 원문자는 일반 숫자로 -->
+<p class="desc pz-desc">원래 함수를 찾아라 🔍 · 미적분Ⅰ Ⅲ-1 <span class="pz-term" data-tip="부정적분">부정적분</span> · 도함수로부터 원래 함수 찾기</p>
+
+<nav class="tabs pz-tabs" role="tablist">
+  <button class="tabBtn pz-tab active" data-tab="t1" role="tab" aria-selected="true">1. 관찰</button>
+  <button class="tabBtn pz-tab" data-tab="t2" role="tab" aria-selected="false">2. 조작</button>
+  <button class="tabBtn pz-tab" data-tab="t3" role="tab" aria-selected="false">3. 내 예</button>
+  <button class="tabBtn pz-tab" data-tab="t4" role="tab" aria-selected="false">4. 질문</button>
+</nav>
+
+<!-- ================= ① 관찰 ================= -->
+<section class="section show" id="t1">
+ <div class="split">
+  <div class="intro">
+   <div class="card">
+    <span class="page">개념 탐구</span>
+    <h2>미분했더니 2x가 나왔어요. 원래 함수는 누구?</h2>
+    <p>아래 네 곡선 중에서 <b>미분하면 2x가 되는 것</b>을 모두 골라 보세요.</p>
+    <p class="muted">힌트: 미분하면 2x라는 건, 모든 x에서 <b><span class="pz-term" data-tip="접선">접선</span>의 기울기가 2x</b>라는 뜻이에요. 그래프를 좌우로 끌어 점을 옮기며 비교해 보세요.</p>
+   </div>
+  </div>
+  <div class="graphCol">
+   <div class="card graphCard">
+   <div class="plane"><canvas id="cv1" aria-label="네 후보 곡선과 접선"></canvas></div>
+   <div class="planeCap"><span>🤏 그래프를 좌우로 끌면 점의 x좌표가 바뀌어요</span><span id="cap1"></span></div>
+   </div>
+  </div>
+  <div class="controls">
+   <div class="card">
+    <div class="sliderRow"><label>점의 x좌표</label><input type="range" id="x1s" min="-3.5" max="3.5" step="0.1"><input type="number" id="x1n" class="miniInput" step="0.1"></div>
+    <div class="btnRow"><button class="btn small pz-btn pz-btn-ghost resetBtn" data-reset="t1">↺ 처음 값으로</button></div>
+    <div class="target" id="target1"></div>
+    <div class="cands" id="cands"></div>
+    <div class="btnRow"><button class="btn pz-btn pz-btn-primary" id="check1">골랐어요, 확인!</button></div>
+    <div class="feedback" id="fb1"></div>
+   </div>
+   <div class="card reveal" id="reveal1">
+    <h3>✨ 발견한 것</h3>
+    <p><span class="math">x<sup>2</sup></span>, <span class="math">x<sup>2</sup>−3</span>, <span class="math">x<sup>2</sup>+4</span>는 서로 <b>y축의 방향으로 평행이동</b>한 곡선이에요. 그래서 같은 x에서 접선이 모두 평행하고, 미분하면 모두 2x가 돼요.</p>
+    <p>이렇게 <b>미분해서 f(x)가 되는 함수</b>를 f(x)의 <b><span class="pz-term" data-tip="부정적분">부정적분</span></b>이라고 해요. 이렇게 평행이동한 곡선은 무수히 많으므로 부정적분도 무수히 많아요.</p>
+    <p class="formula">→ 2x의 부정적분: <span class="math">x<sup>2</sup> + C</span> <span class="muted">(C는 <span class="pz-term" data-tip="적분상수">적분상수</span>)</span></p>
+    <div class="btnRow"><button class="btn ghost small pz-btn pz-btn-soft" data-go="t2">② 조작으로 가기 →</button></div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ================= ② 조작 ================= -->
+<section class="section" id="t2">
+ <div class="split">
+  <div class="intro">
+   <div class="card">
+    <span class="page">부정적분, 적분상수</span>
+    <h2>적분상수 C를 바꾸면 무엇이 변하고, 무엇이 그대로일까?</h2>
+    <p><span class="pz-term" data-tip="도함수">도함수</span> f(x)를 하나 고르면, 미분하여 f(x)가 되는 곡선(<span class="pz-term" data-tip="부정적분">부정적분</span>)이 나타나요.</p>
+    <div class="chips" id="presets"></div>
+    <div class="formula">도함수: <span class="math" id="f2txt"></span></div>
+    <div class="formula">부정적분: <span class="math" id="F2txt"></span></div>
+   </div>
+  </div>
+  <div class="graphCol">
+   <div class="card graphCard">
+   <div class="plane"><canvas id="cv2" aria-label="부정적분 곡선 가족"></canvas></div>
+   <div class="planeCap"><span>위: 부정적분 y = F(x) + C의 그래프</span><span id="cap2"></span></div>
+   <div class="plane"><canvas id="cv2b" aria-label="도함수 그래프"></canvas></div>
+   <div class="planeCap"><span>아래: 도함수 y = f(x)의 그래프 (점의 y좌표 = 위 접선의 기울기)</span><span id="cap2b"></span></div>
+   </div>
+  </div>
+  <div class="controls">
+   <div class="card">
+    <div class="sliderRow"><label>적분상수 C</label><input type="range" id="c2s" min="-5" max="5" step="0.5"><input type="number" id="c2n" class="miniInput" step="0.5"></div>
+    <div class="sliderRow"><label>점의 x좌표</label><input type="range" id="x2s" min="-3" max="3" step="0.1"><input type="number" id="x2n" class="miniInput" step="0.1"></div>
+    <div class="btnRow"><button class="btn small pz-btn pz-btn-ghost resetBtn" data-reset="t2">↺ 처음 값으로</button></div>
+    <label class="check"><input type="checkbox" id="fam2" checked> 다른 C의 값에 대한 곡선도 함께 보기</label>
+    <div class="readout">
+     <div>곡선 위 점의 y좌표<b id="r2h"></b></div>
+     <div>접선의 기울기<b id="r2m"></b></div>
+    </div>
+    <p class="muted" id="r2note"></p>
+   </div>
+   <div class="card">
+    <h3>관찰 체크 ✔</h3>
+    <!-- [버그수정] label이 flex라서 <b>·<sup>가 따로 떨어져 'x  2' 처럼 보였음 → 글자 부분을 span 하나로 묶음 -->
+    <label class="check"><input type="checkbox"><span>C를 바꾸면 곡선이 <b>y축의 방향으로 평행이동</b>한다</span></label>
+    <label class="check"><input type="checkbox"><span>C를 바꿔도 같은 x에서 <b><span class="pz-term" data-tip="접선">접선</span>의 기울기는 변하지 않는</b>다</span></label>
+    <label class="check"><input type="checkbox"><span>위 접선의 기울기 = 아래 도함수 그래프 위 점의 y좌표</span></label>
+    <label class="check"><input type="checkbox"><span>x, x<sup>2</sup>, x<sup>3</sup>의 부정적분을 보고 규칙을 찾았다</span></label>
+   </div>
+   <div class="card">
+    <h3>도함수와 부정적분 <span class="muted">(눌러 본 도함수만 채워져요)</span></h3>
+    <table class="pairs" id="pairs"></table>
+    <p class="muted" style="margin-top:8px">개념 탐구: x, x<sup>2</sup>, x<sup>3</sup>의 부정적분을 비교해 보세요. 지수는 어떻게 변하고, 계수는 어떻게 정해지나요?</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ================= ③ 내가 만든 예 ================= -->
+<section class="section" id="t3">
+ <div class="split">
+  <div class="intro">
+   <div class="card">
+    <span class="page">곡선 하나로 정하기</span>
+    <h2>지나는 점을 하나 정하면 곡선이 하나로 정해질까?</h2>
+    <p>나만의 문제를 만들고, <span class="pz-term" data-tip="적분상수">적분상수</span> C를 조절해 직접 풀어 보세요.</p>
+    <p class="muted" id="t3hint">처음 값은 예시 문제 (접선의 기울기가 x−3이고 점 (2, 4)를 지나는 곡선)예요. 값을 바꿔 나만의 예를 만들어 보세요.</p>
+   </div>
+  </div>
+  <div class="graphCol">
+   <div class="card graphCard">
+   <div class="plane tap"><canvas id="cv3" aria-label="내가 만든 곡선과 지나는 점"></canvas></div>
+   <div class="planeCap"><span>👆 좌표평면을 누르면 곡선이 지나는 점이 바뀌어요</span><span id="cap3"></span></div>
+   </div>
+  </div>
+  <div class="controls">
+   <div class="card">
+    <h3>1단계 · 도함수 f(x) 정하기</h3>
+    <div class="sliderRow"><label>x<sup>2</sup>의 계수</label><input type="range" id="a3s" min="-3" max="3" step="1"><input type="number" id="a3n" class="miniInput" step="1"></div>
+    <div class="sliderRow"><label>x의 계수</label><input type="range" id="b3s" min="-6" max="6" step="1"><input type="number" id="b3n" class="miniInput" step="1"></div>
+    <div class="sliderRow"><label>상수항</label><input type="range" id="k3s" min="-6" max="6" step="1"><input type="number" id="k3n" class="miniInput" step="1"></div>
+    <div class="formula">도함수: <span class="math" id="f3txt"></span></div>
+    <h3 style="margin-top:12px">2단계 · 곡선이 지나는 점 정하기</h3>
+    <div class="ptRow">
+     <span>x <span class="stepper"><button data-p="-1">−</button><span id="p3">2</span><button data-p="1">+</button></span></span>
+     <span>y <span class="stepper"><button data-q="-1">−</button><span id="q3">4</span><button data-q="1">+</button></span></span>
+    </div>
+    <div class="btnRow"><button class="btn ghost small pz-btn pz-btn-soft" id="dice3">🎲 무작위로 바꾸기</button><button class="btn ghost small pz-btn pz-btn-soft" id="book3">📘 예시 문제로</button></div>
+   </div>
+   <div class="card">
+    <h3>3단계 · 적분상수 C를 조절해 곡선이 점을 지나게 하기</h3>
+    <div class="sliderRow"><label>C</label><input type="range" id="c3s" min="-10" max="10" step="0.1"><input type="number" id="c3n" class="miniInput" step="0.1"></div>
+    <p class="muted" style="margin-top:-4px">1·2단계 값을 바꾸면 C는 0으로 돌아가요.</p>
+    <div class="btnRow"><button class="btn ghost small pz-btn pz-btn-soft" data-dc="-1">−1</button><button class="btn ghost small pz-btn pz-btn-soft" data-dc="-0.1">−0.1</button><button class="btn ghost small pz-btn pz-btn-soft" data-dc="0.1">+0.1</button><button class="btn ghost small pz-btn pz-btn-soft" data-dc="1">+1</button></div>
+    <div class="readout">
+     <div>x = <span id="r3p"></span>에서의 함숫값<b id="r3h"></b></div>
+     <div>점의 y좌표<b id="r3q"></b></div>
+    </div>
+    <div class="feedback" id="fb3"></div>
+   </div>
+   <div class="card reveal" id="reveal3">
+    <h3>📝 나의 예</h3>
+    <div class="myCard" id="myCard"></div>
+    <p class="muted" style="margin-top:10px">이 예는 ④ 열린 질문의 제출 내용에 자동으로 담겨요. 값을 바꿔 다른 예를 만들어도 좋아요(마지막으로 푼 예가 담겨요).</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ================= ④ 열린 질문 ================= -->
+<section class="section" id="t4">
+ <div class="split">
+  <div class="intro">
+   <div class="card">
+    <span class="page">생각 넓히기 (추론·의사소통)</span>
+    <h2>되돌리기 실험: 순서를 바꾸면?</h2>
+    <p>같은 함수에 <b>적분 → 미분</b>과 <b>미분 → 적분</b>을 해 보고 결과를 비교해 보세요.</p>
+    <div class="chips" id="fn4"></div>
+   </div>
+  </div>
+  <div class="graphCol">
+   <div class="card">
+    <h3>실험 A · 적분 먼저, 그다음 미분</h3>
+    <div class="pipe" id="pipeA"></div>
+    <button class="btn small pz-btn pz-btn-primary" id="runA">실험 A 해 보기</button>
+   </div>
+   <div class="card">
+    <h3>실험 B · 미분 먼저, 그다음 적분</h3>
+    <div class="pipe" id="pipeB"></div>
+    <button class="btn small pz-btn pz-btn-primary" id="runB">실험 B 해 보기</button>
+   </div>
+   <div class="cardSoft reveal" id="cmp4">
+    <b>비교해 보면?</b> A는 처음 함수로 그대로 돌아왔어요. B는 처음 함수와 <b>같지 않아요</b>. 어디가 달라졌는지 찾아보세요.
+   </div>
+  </div>
+  <div class="controls">
+   <div class="card">
+    <span class="page">🤔 열린 질문</span>
+    <p class="question">함수를 미분한 다음 다시 적분하면 처음 함수와 같아지지 않을 수 있어요. 왜 그런지 내 말로 1~2문장으로 설명해 보세요.</p>
+    <p class="muted">정답은 하나가 아니에요. 비유를 써도 좋고, ②·③에서 본 장면을 예로 들어도 좋아요.</p>
+    <details>
+     <summary>생각 도우미 (막힐 때만 열기)</summary>
+     <p class="muted" style="margin-top:6px">· ②에서 C를 바꿨을 때, 바뀐 것과 그대로인 것은?<br>· ③에서 곡선을 하나로 정하려고 무엇을 더 정했나요?<br>· 미분하면 사라지는 부분은 함수의 어느 부분일까요?</p>
+    </details>
+    <input class="nameIn" id="name4" placeholder="학번 · 이름 (예: 20512 김강원)" style="margin:10px 0 8px">
+    <textarea id="ans4" placeholder="내 생각을 1~2문장으로 써 보세요."></textarea>
+    <div class="counter" id="cnt4">0문장 · 0자</div>
+    <div class="btnRow"><button class="btn pz-btn pz-btn-primary" id="copy4">📋 제출용으로 복사하기</button></div>
+    <p class="muted" style="margin-top:8px">복사한 내용을 선생님이 안내한 곳(패들렛 등)에 붙여 넣으세요. ③에서 만든 예도 함께 복사돼요.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<div class="card" style="margin-top:20px">
+ <details>
+  <summary>선생님용 · 활동 안내표</summary>
+  <table class="tbl">
+   <tr><th>탭</th><th>다루는 개념</th><th>학생이 하는 일</th></tr>
+   <tr><td>① 관찰</td><td>미분하여 2x가 되는 함수 고르기</td><td>접선의 기울기를 2x의 값과 비교해 x², x²−3, x²+4 고르기 → 부정적분·적분상수 C의 뜻</td></tr>
+   <tr><td>② 조작</td><td>부정적분의 정의, 적분상수, xⁿ의 부정적분, 실수배·합·차</td><td>C를 바꿔도 접선의 기울기가 같음을 확인, 도함수의 그래프와 연결, xⁿ의 부정적분 규칙 추측</td></tr>
+   <tr><td>③ 내가 만든 예</td><td>지나는 점이 주어진 곡선 구하기</td><td>도함수와 곡선이 지나는 점을 직접 정하고 C를 맞춰 곡선을 하나로 결정 (처음 값의 답: y = ½x² − 3x + 8)</td></tr>
+   <tr><td>④ 열린 질문</td><td>적분 후 미분 vs 미분 후 적분</td><td>순서를 바꾼 실험 후 1~2문장 설명 → 복사해 제출</td></tr>
+  </table>
+  <p class="muted" style="margin-top:8px">열린 질문 예상 답 유형: 상수항이 미분하면 사라짐 / y축 방향 평행이동 정보가 없어짐 / 도함수가 같은 곡선이 무수히 많음 / 점 하나(처음 값)를 알면 되찾을 수 있음 / 비유(출발 위치를 모르는 이동 기록 등). 정적분(부호 있는 넓이)은 다음 시뮬레이터에서 다룹니다.</p>
+ </details>
+</div>
+
+<p class="footer">✏️ made by 지인섭</p>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- 다항식 도구 (계수 배열: p[k] = x^k의 계수) ---------- */
+const evalP=(p,x)=>{let s=0;for(let k=p.length-1;k>=0;k--)s=s*x+p[k];return s;};
+const deriv=p=>p.length<=1?[0]:p.slice(1).map((c,i)=>c*(i+1));
+const integ=p=>[0,...p.map((c,i)=>c/(i+1))];
+const withC=(p,C)=>{const q=p.slice();q[0]=(q[0]||0)+C;return q;};
+const SUP={2:'²',3:'³',4:'⁴',5:'⁵',6:'⁶',7:'⁷',8:'⁸',9:'⁹'};
+function frac(v){
+  const r=Math.round(v); if(Math.abs(v-r)<1e-9) return {n:r,d:1};
+  for(let d=2;d<=60;d++){const n=v*d; if(Math.abs(n-Math.round(n))<1e-7) return {n:Math.round(n),d};}
+  return null;
+}
+function numStr(v,mode){ // 부호 없는 크기를 받아 문자열로
+  const f=frac(v);
+  if(f&&f.d>1) return mode==='html'?`<span class="fr"><span>${f.n}</span><span>${f.d}</span></span>`:`(${f.n}/${f.d})`;
+  if(f) return String(f.n);
+  return (+v.toFixed(2)).toString();
+}
+function fmtPoly(p,mode='html',tail=''){
+  let out='',first=true;
+  for(let k=p.length-1;k>=0;k--){
+    const c=p[k]; if(Math.abs(c)<1e-12) continue;
+    const a=Math.abs(c);
+    let cs=(k>0&&Math.abs(a-1)<1e-12)?'':numStr(a,mode);
+    const xs=k===0?'':k===1?'x':(mode==='html'?`x<sup>${k}</sup>`:'x'+SUP[k]);
+    if(first){out+=(c<0?'−':'')+cs+xs;first=false;}
+    else out+=` ${c<0?'−':'+'} ${cs}${xs}`;
+  }
+  if(first) out='0';
+  if(tail){ if(out==='0') out=tail; else out+=' + '+tail; }
+  return out;
+}
+const fmt=(v,d=1)=>{let s=v.toFixed(d); if(/^-0(\.0+)?$/.test(s)) s=s.slice(1); return s.replace('-','−');};
+/* [2단계] 정수·소수 그대로 보여 주되 음수는 진짜 마이너스(−)로 */
+const fmtN=v=>{let s=String(+(+v).toFixed(2)); if(s==='-0') s='0'; return s.replace('-','−');};
+const fmtExact=v=>{const f=frac(v); if(f&&f.d>1) return (f.n<0?'−':'')+`<span class="fr"><span>${Math.abs(f.n)}</span><span>${f.d}</span></span>`; if(f) return fmt(f.n,0); return fmt(v,2);};
+const fmtExactTxt=v=>{const f=frac(v); if(f&&f.d>1) return (f.n<0?'−':'')+`${Math.abs(f.n)}/${f.d}`; if(f) return fmt(f.n,0); return fmt(v,2);};
+
+/* ---------- [2단계] 테마 색·확대 비율·화면 높이 ---------- */
+function tok(name){
+  if(window.PastelUI) return PastelUI.color(name);
+  let v=getComputedStyle(document.documentElement).getPropertyValue(name).trim(),g=0;
+  while(/^var\(/.test(v)&&g++<6) v=getComputedStyle(document.documentElement).getPropertyValue(v.replace(/^var\(\s*|\s*\)$/g,'')).trim();
+  return v||'#888';
+}
+/* #pz-main 의 CSS zoom 비율 (화면 px ÷ CSS px) */
+function cssScale(el){const r=el.getBoundingClientRect();return (el.clientWidth>0&&r.width>0)?r.width/el.clientWidth:1;}
+const CHART_FONT='"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+const SPLIT_MQ=window.matchMedia('(min-width: 900px)');
+function availH(){const v=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pz-avail-h'));return (isFinite(v)&&v>0)?v:window.innerHeight-64;}
+function topbarCssH(){const v=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pz-topbar-h'));return isFinite(v)?v:64;}
+/* 그래프 열(sticky)이 처음 화면과 sticky 상태 모두에서 다 보이도록 캔버스 하나가 쓸 수 있는 높이 (CSS px).
+   ②처럼 좌표평면이 둘이면 위 58% / 아래 42%로 나눔 */
+function planeBudget(cv){
+  const col=cv.closest('.graphCard')||cv.parentElement;
+  if(!col||col.offsetParent===null) return 9999;
+  const cvs=[...col.querySelectorAll('.plane canvas')];
+  const share=cvs.length>1?(cv===cvs[0]?0.58:0.42):1;
+  const k=cssScale(col),avail=availH(),cr=col.getBoundingClientRect();
+  let ch=0;cvs.forEach(c=>ch+=c.getBoundingClientRect().height);
+  const chrome=(cr.height-ch)/k;
+  const bar=document.querySelector('.pz-topbar'),barScreen=bar?bar.offsetHeight:64;
+  let room;
+  if(SPLIT_MQ.matches){
+    const top0=(cr.top+window.scrollY-barScreen)/k;
+    room=Math.min(avail-Math.min(top0,avail*0.4)-chrome-14, window.innerHeight/k-(topbarCssH()+12)-chrome-14);
+  } else room=avail-chrome-24;
+  return Math.max(200,room*share);
+}
+function haloText(ctx,text,x,y,color,lw){
+  ctx.save();ctx.lineJoin='round';ctx.lineWidth=lw||5;ctx.strokeStyle='rgba(255,255,255,0.95)';ctx.strokeText(text,x,y);
+  ctx.fillStyle=color;ctx.fillText(text,x,y);ctx.restore();
+}
+
+/* ---------- 좌표평면 렌더러 (한 칸 = 정사각형, 가로 xStep : 세로 yStep) ---------- */
+function makeView(xMin,xMax,xStep,fns,extraYs=[],maxRowsRatio=1.25,cap=40){
+  let lo=0,hi=0;
+  fns.forEach(fn=>{for(let x=xMin;x<=xMax+1e-9;x+=(xMax-xMin)/120){const y=fn(x); if(isFinite(y)){lo=Math.min(lo,Math.max(y,-cap));hi=Math.max(hi,Math.min(y,cap));}}});
+  extraYs.forEach(y=>{lo=Math.min(lo,y);hi=Math.max(hi,y);});
+  const cols=(xMax-xMin)/xStep, maxRows=Math.max(5,Math.round(cols*maxRowsRatio));
+  for(const s of [1,2,5,10,20,50,100]){
+    const yMin=(Math.floor(lo/s)-1)*s, yMax=(Math.ceil(hi/s)+1)*s;
+    if((yMax-yMin)/s<=maxRows) return {xMin,xMax,xStep,yMin,yMax,yStep:s};
+  }
+  return {xMin,xMax,xStep,yMin:-500,yMax:500,yStep:100};
+}
+function drawPlane(cv,V,L={}){
+  let w=cv.parentElement.clientWidth; if(!w) return;
+  const cols=(V.xMax-V.xMin)/V.xStep, rows=(V.yMax-V.yMin)/V.yStep;
+  let h=Math.round(w*rows/cols);
+  /* [2단계] 칸이 정사각형이라 세로로 긴 좌표평면은 화면 밖으로 넘쳤음 → 쓸 수 있는 높이를 넘으면 폭을 줄여(가운데 정렬) 한 화면에 */
+  const mh=planeBudget(cv);
+  if(h>mh){w=Math.max(160,Math.floor(mh*cols/rows));h=Math.round(w*rows/cols);cv.style.width=w+'px';} else cv.style.width='';
+  const dpr=(window.devicePixelRatio||1)*cssScale(cv.parentElement);   // 글자 크기(zoom)만큼 해상도를 올려 선명하게
+  cv.style.height=h+'px'; cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  const X=x=>(x-V.xMin)/(V.xMax-V.xMin)*w, Y=y=>(V.yMax-y)/(V.yMax-V.yMin)*h;
+  const sx=w/(V.xMax-V.xMin), sy=h/(V.yMax-V.yMin);
+  cv._V=V;
+  ctx.fillStyle=tok('--pz-panel'); ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle=tok('--pz-grid'); ctx.lineWidth=1.2;
+  for(let i=0;i<=cols;i++){const px=Math.round(X(V.xMin+i*V.xStep))+.5;ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,h);ctx.stroke();}
+  for(let i=0;i<=rows;i++){const py=Math.round(Y(V.yMin+i*V.yStep))+.5;ctx.beginPath();ctx.moveTo(0,py);ctx.lineTo(w,py);ctx.stroke();}
+  ctx.strokeStyle=tok('--pz-axis'); ctx.lineWidth=1.6;
+  const ax=Math.min(Math.max(X(0),0),w), ay=Math.min(Math.max(Y(0),0),h);
+  ctx.beginPath();ctx.moveTo(0,ay);ctx.lineTo(w,ay);ctx.moveTo(ax,0);ctx.lineTo(ax,h);ctx.stroke();
+  // 눈금 숫자 (12.5px 이상, 음수는 −)
+  const fs=w<420?12.5:13.5;
+  ctx.font=`600 ${fs}px ${CHART_FONT}`;
+  const muted=tok('--pz-muted');
+  const lbl=(t,x,y,al)=>{ctx.textAlign=al;haloText(ctx,t,x,y,muted,4);};
+  const xEvery=V.xStep<1?1:(cols>12?2:1);
+  for(let k=Math.ceil(V.xMin);k<=Math.floor(V.xMax);k++){ if(k===0||k%xEvery) continue; if(k===V.xMin||k===V.xMax) continue; lbl(fmt(k,0),X(k),Math.min(ay+fs+4,h-4),'center'); }
+  const yEvery=rows>14?2:1;
+  for(let i=1;i<rows;i++){const v=V.yMin+i*V.yStep; if(Math.abs(v)<1e-9||i%yEvery) continue; lbl(fmt(v,0),Math.min(ax+6,w-30),Y(v)+4.5,'left');}
+  if(X(0)>0&&X(0)<w&&Y(0)>0&&Y(0)<h) lbl('O',ax-5,ay+fs+4,'right');
+  // 세로 안내선
+  (L.vlines||[]).forEach(v=>{ctx.save();ctx.setLineDash([5,5]);ctx.strokeStyle=v.color||tok('--pz-line2');ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(X(v.x),0);ctx.lineTo(X(v.x),h);ctx.stroke();ctx.restore();});
+  // 곡선
+  (L.curves||[]).forEach(c=>{
+    ctx.save();ctx.globalAlpha=c.alpha??1;ctx.strokeStyle=c.color;ctx.lineWidth=c.width||3;ctx.lineJoin='round';ctx.lineCap='round';
+    if(c.dash)ctx.setLineDash(c.dash);
+    ctx.beginPath();const N=400;let started=false;
+    for(let i=0;i<=N;i++){const x=V.xMin+(V.xMax-V.xMin)*i/N;let y=c.fn(x);if(!isFinite(y)){started=false;continue;}
+      const py=Math.max(-2000,Math.min(h+2000,Y(y)));if(!started){ctx.moveTo(X(x),py);started=true;}else ctx.lineTo(X(x),py);}
+    ctx.stroke();ctx.restore();
+  });
+  // 접선 (화면에서 일정한 길이)
+  (L.tangents||[]).forEach(t=>{
+    const dx=sx, dy=-t.m*sy, n=Math.hypot(dx,dy), len=t.len||Math.min(90,w*0.16);
+    const ux=dx/n*len, uy=dy/n*len, cx=X(t.x), cy=Y(t.y);
+    ctx.save();ctx.globalAlpha=t.alpha??1;ctx.strokeStyle=t.color;ctx.lineWidth=t.width||2.2;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(cx-ux,cy-uy);ctx.lineTo(cx+ux,cy+uy);ctx.stroke();ctx.restore();
+  });
+  // [2단계] 곡선 이름표: 오른쪽 끝 근처(화면 안)에서 곡선 색 글자로. 서로 16px 안으로 겹치면 가족 곡선 이름은 생략
+  const placed=[];
+  ctx.font=`800 14.5px ${CHART_FONT}`;
+  (L.endTags||[]).forEach(tg=>{
+    let at=null;
+    for(let i=0;i<=200;i++){const x=V.xMax-(V.xMax-V.xMin)*(0.02+i*0.004);const y=tg.fn(x);if(!isFinite(y))continue;const py=Y(y);if(py>18&&py<h-10){at={px:X(x),py};break;}}
+    if(!at) return;
+    const ty=at.py+(at.py<h*0.25?20:-9);
+    if(placed.some(q=>Math.abs(q-ty)<16)) return;
+    placed.push(ty);ctx.textAlign='right';haloText(ctx,tg.text,at.px-8,ty,tg.color);
+  });
+  (L.labels||[]).forEach(l=>{ctx.save();ctx.globalAlpha=l.alpha??1;ctx.font=`800 15px ${CHART_FONT}`;
+    let al=l.align||'left',x=X(l.x)+(l.dx||0);const tw=ctx.measureText(l.text).width;
+    if(al==='right'&&x-tw<4){al='left';x=X(l.x)+Math.abs(l.dx||0);}      // 왼쪽 끝을 넘으면 곡선 안쪽으로
+    if(al==='left'&&x+tw>w-4){al='right';x=X(l.x)-Math.abs(l.dx||0);}
+    ctx.textAlign=al;haloText(ctx,l.text,x,Y(l.y)+5,l.color);ctx.restore();});
+  // 점: 움직이는 점 = 흰 채움 + 굵은 테두리 / 고정된 점 = 채운 점. 이름은 15px 굵게
+  (L.points||[]).forEach(p=>{
+    const cx=X(p.x),cy=Y(p.y);ctx.save();ctx.globalAlpha=p.alpha??1;
+    ctx.beginPath();ctx.arc(cx,cy,p.r||6,0,Math.PI*2);
+    if(p.hollow){ctx.fillStyle=tok('--pz-panel');ctx.fill();ctx.lineWidth=3.5;ctx.strokeStyle=p.color;ctx.stroke();}
+    else{ctx.fillStyle=p.color;ctx.fill();ctx.lineWidth=2.5;ctx.strokeStyle=tok('--pz-panel');ctx.stroke();}
+    if(p.label){ctx.font=`800 15px ${CHART_FONT}`;
+      const right=cx<w-130;ctx.textAlign=right?'left':'right';const tx=cx+(right?12:-12),ty=Math.max(18,cy-11);haloText(ctx,p.label,tx,ty,p.labelColor||p.color);}
+    ctx.restore();
+  });
+}
+function scaleCap(V){return `한 칸: 가로 ${fmt(V.xStep,V.xStep<1?1:0)}, 세로 ${V.yStep}`;}
+function toData(cv,e){const r=cv.getBoundingClientRect(),V=cv._V;return{x:V.xMin+(e.clientX-r.left)/r.width*(V.xMax-V.xMin),y:V.yMax-(e.clientY-r.top)/r.height*(V.yMax-V.yMin)};}
+function attachDrag(cv,onX){
+  let down=false;
+  cv.addEventListener('pointerdown',e=>{if(!cv._V)return;down=true;try{cv.setPointerCapture(e.pointerId);}catch(_){}onX(toData(cv,e).x);});
+  cv.addEventListener('pointermove',e=>{if(down)onX(toData(cv,e).x);});
+  ['pointerup','pointercancel','lostpointercapture'].forEach(t=>cv.addEventListener(t,()=>down=false));
+}
+function bindPair(sId,nId,get,set,min,max,step){
+  const s=document.getElementById(sId),n=document.getElementById(nId);
+  s.min=min;s.max=max;s.step=step;n.step=step;
+  const sync=()=>{const v=get();s.value=v;n.value=+(+v).toFixed(2);};
+  s.addEventListener('input',()=>{set(+s.value);n.value=+(+s.value).toFixed(2);});
+  n.addEventListener('input',()=>{let v=+n.value;if(n.value===''||isNaN(v))return;v=Math.max(min,Math.min(max,v));set(v);s.value=v;});
+  n.addEventListener('change',sync);
+  return {sync,setRange:(a,b)=>{min=a;max=b;s.min=a;s.max=b;sync();}};
+}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const round1=v=>Math.round(v*10)/10;
+function toast(msg){if(window.PastelUI){PastelUI.toast(msg);return;}const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),1800);}
+
+/* ---------- 탭 ---------- */
+let current='t1';
+function showTab(id){
+  current=id;
+  document.querySelectorAll('.tabBtn').forEach(b=>{b.classList.toggle('active',b.dataset.tab===id);b.setAttribute('aria-selected',String(b.dataset.tab===id));});
+  document.querySelectorAll('.section').forEach(s=>s.classList.toggle('show',s.id===id));
+  if(window.PastelUI) PastelUI.fade(document.getElementById(id));   // [2단계] 새 패널을 부드럽게
+  window.scrollTo({top:0,behavior:'smooth'});
+  redrawCurrent();
+  requestAnimationFrame(()=>{ if(current===id) redrawCurrent(); });
+}
+document.querySelectorAll('.tabBtn').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
+document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.go)));
+/* [2단계] 탭을 처음 완료하면 축하 (같은 탭은 한 번만). ④는 쓰는 도중이 아니라 '제출용으로 복사하기' 때 축하 */
+const DONE_MSG={t1:'🎉 관찰 완료! 부정적분을 찾았어요',t2:'🎉 조작 완료! 부정적분 짝을 4개 이상 찾았어요',t3:'🎉 나의 예 완성!'};
+function markDone(id){document.querySelector(`.tabBtn[data-tab="${id}"]`).classList.add('done');
+  if(DONE_MSG[id]&&window.PastelUI) PastelUI.celebrate('3-1-'+id,DONE_MSG[id]);}
+function redrawCurrent(){({t1:render1,t2:render2,t3:render3,t4:()=>{}})[current]();}
+let rT;window.addEventListener('resize',()=>{clearTimeout(rT);rT=setTimeout(redrawCurrent,120);});
+
+/* ================= ① 관찰 ================= */
+/* [2단계] 네 후보는 팔레트에서 서로 다른 색(같은 계열 농담을 쓰면 정답 셋이 티가 나므로 팔레트 순환) */
+const COLOR_TOK=['--pz-f','--pz-butter-line','--pz-lav-line','--pz-mint-line'];
+const INK_TOK=['--pz-sky-ink','--pz-butter-ink','--pz-lav-ink','--pz-mint-ink'];
+const S1={x0:1,sel:new Set(),solved:false};
+const CANDS=[
+  {html:'x<sup>2</sup>',p:[0,0,1],tag:{t:'x²',y:13,side:1,out:false}},
+  {html:'2x<sup>2</sup>',p:[0,0,2],tag:{t:'2x²',y:13,side:1,out:false}},
+  {html:'x<sup>2</sup> − 3',p:[-3,0,1],tag:{t:'x² − 3',y:-1.2,side:-1,out:false}},
+  {html:'x<sup>2</sup> + 4',p:[4,0,1],tag:{t:'x² + 4',y:13,side:-1,out:true}},
+];
+const V1={xMin:-4,xMax:4,xStep:1,yMin:-6,yMax:14,yStep:2};
+const candBox=document.getElementById('cands');
+CANDS.forEach((c,i)=>{
+  const d=document.createElement('div');d.className='cand';d.dataset.i=i;
+  d.innerHTML=`<span class="pick">고르기</span><div class="nm"><span class="dot" style="background:var(${COLOR_TOK[i]})"></span>${c.html}</div><div class="sl">접선의 기울기 <b id="sl${i}"></b></div>`;
+  d.addEventListener('click',()=>{S1.sel.has(i)?S1.sel.delete(i):S1.sel.add(i);d.classList.toggle('sel');d.querySelector('.pick').textContent=S1.sel.has(i)?'✓ 골랐음':'고르기';});
+  candBox.appendChild(d);
+});
+const x1=bindPair('x1s','x1n',()=>S1.x0,v=>{S1.x0=v;render1();},-3.5,3.5,0.1);
+attachDrag(document.getElementById('cv1'),x=>{S1.x0=clamp(round1(x),-3.5,3.5);x1.sync();render1();});
+function render1(){
+  const x0=S1.x0;
+  CANDS.forEach((c,i)=>{document.getElementById('sl'+i).textContent=fmt(evalP(deriv(c.p),x0));});
+  document.getElementById('target1').innerHTML=`미분하면 2x → x = <b>${fmt(x0)}</b>에서 필요한 접선의 기울기: 2 × ${fmt(x0)} = <b>${fmt(2*x0)}</b>`;
+  const COLORS=COLOR_TOK.map(tok);
+  /* [2단계] 곡선 이름표: 원점 근처에서 겹치는 x²·2x²도 이름으로 구분 (위쪽 끝, 서로 다른 높이·방향) */
+  const labels=CANDS.map((c,i)=>{const g=c.tag,a=c.p[2],k=c.p[0],x=g.side*Math.sqrt((g.y-k)/a);
+    return {text:g.t,x,y:g.y,color:tok(INK_TOK[i]),align:(g.side>0)!==g.out?'right':'left',dx:((g.side>0)!==g.out?-8:8),alpha:S1.sel.size&&!S1.sel.has(i)?.55:1};});
+  drawPlane(document.getElementById('cv1'),V1,{
+    vlines:[{x:x0}],
+    curves:CANDS.map((c,i)=>({fn:x=>evalP(c.p,x),color:COLORS[i],width:S1.sel.has(i)?4.5:3,alpha:S1.sel.size&&!S1.sel.has(i)?.45:1})),
+    tangents:CANDS.map((c,i)=>({x:x0,y:evalP(c.p,x0),m:evalP(deriv(c.p),x0),color:COLORS[i],width:2.6})),
+    points:CANDS.map((c,i)=>({x:x0,y:evalP(c.p,x0),color:COLORS[i],r:6,hollow:true})),
+    labels
+  });
+  document.getElementById('cap1').textContent=scaleCap(V1);
+}
+document.getElementById('check1').addEventListener('click',()=>{
+  const fb=document.getElementById('fb1'),s=S1.sel;
+  const right=s.size===3&&s.has(0)&&s.has(2)&&s.has(3);
+  fb.className='feedback show '+(right?'good':'warn');
+  if(right){fb.innerHTML='정답! 세 곡선은 모든 x에서 접선의 기울기가 2x의 값과 같아요.';document.getElementById('reveal1').classList.add('show');S1.solved=true;markDone('t1');}
+  else if(s.has(1)) fb.innerHTML='2x<sup>2</sup>의 접선의 기울기를 2x의 값과 비교해 보세요. 점의 x좌표가 1일 때 접선의 기울기는 얼마인가요?';
+  else if(s.size===0) fb.innerHTML='먼저 카드를 눌러 곡선을 골라 보세요.';
+  else fb.innerHTML='아직 놓친 곡선이 있어요. 점의 x좌표를 여러 값으로 바꾸며 모든 곡선의 접선의 기울기를 비교해 보세요.';
+  render1();
+});
+
+/* ================= ② 조작 ================= */
+const PRESETS=[
+  {html:'2x',p:[0,2],pg:'',xr:[-4,4],xs:1},
+  {html:'1',p:[1],pg:'',xr:[-4,4],xs:1},
+  {html:'3x<sup>2</sup>',p:[0,0,3],pg:'',xr:[-3,3],xs:1},
+  {html:'6',p:[6],pg:'',xr:[-3,3],xs:1},
+  {html:'5x<sup>4</sup>',p:[0,0,0,0,5],pg:'',xr:[-2,2],xs:.5},
+  {html:'x',p:[0,1],pg:'',xr:[-4,4],xs:1},
+  {html:'x<sup>2</sup>',p:[0,0,1],pg:'',xr:[-3,3],xs:1},
+  {html:'x<sup>3</sup>',p:[0,0,0,1],pg:'',xr:[-3,3],xs:1},
+  {html:'3x<sup>2</sup>+4x−2',p:[-2,4,3],pg:'',xr:[-3,2],xs:.5},
+];
+const S2={pi:0,C:0,x0:1,fam:true,visited:new Set([0])};
+PRESETS.forEach(pr=>{const F=integ(pr.p);
+  pr.V=makeView(pr.xr[0],pr.xr[1],pr.xs,[x=>evalP(F,x)+5,x=>evalP(F,x)-5]);
+  pr.Vf=makeView(pr.xr[0],pr.xr[1],pr.xs,[x=>evalP(pr.p,x)],[],0.75);});
+const presetBox=document.getElementById('presets');
+PRESETS.forEach((pr,i)=>{const b=document.createElement('button');b.className='chip'+(i===0?' on':'');
+  b.innerHTML=`<span class="math">${pr.html}</span><span class="pg">${pr.pg}</span>`;
+  b.addEventListener('click',()=>{S2.pi=i;S2.visited.add(i);presetBox.querySelectorAll('.chip').forEach((c,j)=>c.classList.toggle('on',j===i));
+    /* [버그수정] 범위 끝이 ±1.75, −2.75처럼 0.1 눈금에서 어긋나 슬라이더로 x=0, 1 같은 값을 고를 수 없었음(1 → 1.05) → 범위를 0.1 눈금에 맞춤 */
+    const m=pr.xr[1]-pr.xr[0]>5?0.5:0.25, lo=Math.ceil((pr.xr[0]+m)*10-1e-9)/10, hi=Math.floor((pr.xr[1]-m)*10+1e-9)/10;
+    x2.setRange(lo,hi); S2.x0=clamp(S2.x0,lo,hi); x2.sync(); render2();});
+  presetBox.appendChild(b);});
+const c2=bindPair('c2s','c2n',()=>S2.C,v=>{S2.C=v;render2();},-5,5,0.5);
+const x2=bindPair('x2s','x2n',()=>S2.x0,v=>{S2.x0=v;render2();},-3.5,3.5,0.1);
+document.getElementById('fam2').addEventListener('change',e=>{S2.fam=e.target.checked;render2();});
+attachDrag(document.getElementById('cv2'),x=>{const pr=PRESETS[S2.pi];S2.x0=clamp(round1(x),+document.getElementById('x2s').min,+document.getElementById('x2s').max);x2.sync();render2();});
+attachDrag(document.getElementById('cv2b'),x=>{S2.x0=clamp(round1(x),+document.getElementById('x2s').min,+document.getElementById('x2s').max);x2.sync();render2();});
+function render2(){
+  const pr=PRESETS[S2.pi],F=integ(pr.p),x0=S2.x0,C=S2.C,m=evalP(pr.p,x0);
+  document.getElementById('f2txt').innerHTML=fmtPoly(pr.p);
+  document.getElementById('F2txt').innerHTML=fmtPoly(F,'html','C')+`<br><span class="muted" style="font-family:var(--pz-font);font-weight:400">지금 그린 곡선: </span>y = ${fmtPoly(withC(F,C))}`;
+  const curves=[],tangents=[],points=[];
+  /* [2단계] 곡선 가족(+C)은 같은 하늘색 계열 농담: 지금 곡선 = --pz-f 진하게, 다른 C = --pz-sky 옅게. 접선 = --pz-ref */
+  const famCol=tok('--pz-sky'),mainCol=tok('--pz-f'),refCol=tok('--pz-ref'),famInk=tok('--pz-sky-ink');
+  const endTags=[{fn:x=>evalP(F,x)+C,text:`C = ${fmtN(C)}`,color:famInk,main:true}];
+  if(S2.fam) [-4,-2,0,2,4].forEach(c=>{if(Math.abs(c-C)<1e-9)return;curves.push({fn:x=>evalP(F,x)+c,color:famCol,width:2.6,alpha:.8});
+    tangents.push({x:x0,y:evalP(F,x0)+c,m,color:famCol,width:2.2,alpha:.85});endTags.push({fn:x=>evalP(F,x)+c,text:`C = ${fmtN(c)}`,color:famInk});});
+  curves.push({fn:x=>evalP(F,x)+C,color:mainCol,width:4.2});
+  tangents.push({x:x0,y:evalP(F,x0)+C,m,color:refCol,width:3.2});
+  points.push({x:x0,y:evalP(F,x0)+C,color:tok('--pz-point'),r:7,hollow:true});
+  drawPlane(document.getElementById('cv2'),pr.V,{vlines:[{x:x0}],curves,tangents,points,endTags});
+  drawPlane(document.getElementById('cv2b'),pr.Vf,{vlines:[{x:x0}],curves:[{fn:x=>evalP(pr.p,x),color:tok('--pz-deriv'),width:3.4}],
+    points:[{x:x0,y:m,color:tok('--pz-point'),r:7,hollow:true,label:`f(${fmt(x0)}) = ${fmt(m)}`,labelColor:tok('--pz-accent-ink')}],
+    endTags:[{fn:x=>evalP(pr.p,x),text:'y = f(x)',color:tok('--pz-mint-ink'),main:true}]});
+  document.getElementById('cap2').textContent=scaleCap(pr.V);
+  document.getElementById('cap2b').textContent=scaleCap(pr.Vf);
+  document.getElementById('r2h').textContent=fmt(evalP(F,x0)+C);
+  document.getElementById('r2m').textContent=fmt(m);
+  document.getElementById('r2note').innerHTML=`x = ${fmt(x0)}에서 도함수의 함숫값도 <b class="mono">${fmt(m)}</b> — 적분상수 C의 값(지금 ${fmtN(C)})과 관계없이 같아요.`;
+  // 짝 표
+  document.getElementById('pairs').innerHTML=PRESETS.map((p,i)=>`<tr><td>${i+1}</td><td><span class="math">${p.html}</span> &nbsp;→&nbsp; ${S2.visited.has(i)?`<span class="math">${fmtPoly(integ(p.p),'html','C')}</span>`:'<span class="q">? (눌러 보기)</span>'}</td></tr>`).join('');
+  if(S2.visited.size>=4) markDone('t2');
+}
+
+/* ================= ③ 내가 만든 예 ================= */
+const S3={a:0,b:1,k:-3,p:2,q:4,C:0,solved:false,V:null,my:null};
+const f3=()=>[S3.k,S3.b,S3.a];
+const a3=bindPair('a3s','a3n',()=>S3.a,v=>{S3.a=Math.round(v);changed3();},-3,3,1);
+const b3=bindPair('b3s','b3n',()=>S3.b,v=>{S3.b=Math.round(v);changed3();},-6,6,1);
+const k3=bindPair('k3s','k3n',()=>S3.k,v=>{S3.k=Math.round(v);changed3();},-6,6,1);
+const c3=bindPair('c3s','c3n',()=>S3.C,v=>{S3.C=v;render3();},-10,10,0.1);
+function cStar(){return S3.q-evalP(integ(f3()),S3.p);}
+function changed3(){
+  S3.solved=false;S3.C=0;
+  const F=integ(f3()),cs=cStar();
+  S3.V=makeView(-4,4,1,[x=>evalP(F,x)+cs],[S3.q],1.25,40);
+  const R=Math.max(10,Math.ceil((Math.abs(cs)+3)/5)*5); c3.setRange(-R,R);
+  document.getElementById('p3').textContent=fmtN(S3.p);document.getElementById('q3').textContent=fmtN(S3.q);
+  document.getElementById('fb3').className='feedback';
+  render3();
+}
+document.querySelectorAll('[data-p]').forEach(b=>b.addEventListener('click',()=>{S3.p=clamp(S3.p+ +b.dataset.p,-4,4);changed3();}));
+document.querySelectorAll('[data-q]').forEach(b=>b.addEventListener('click',()=>{S3.q=clamp(S3.q+ +b.dataset.q,-30,30);changed3();}));
+document.querySelectorAll('[data-dc]').forEach(b=>b.addEventListener('click',()=>{S3.C=+(S3.C+ +b.dataset.dc).toFixed(2);c3.setRange(+document.getElementById('c3s').min,+document.getElementById('c3s').max);render3();}));
+document.getElementById('dice3').addEventListener('click',()=>{
+  const r=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+  S3.a=r(-1,2);S3.b=r(-4,4);S3.k=r(-4,4);if(!S3.a&&!S3.b&&!S3.k)S3.k=2;S3.p=r(-3,3);S3.q=r(-5,6);
+  a3.sync();b3.sync();k3.sync();document.getElementById('t3hint').textContent='🎲 값이 무작위로 바뀌었어요. 이 예를 풀어 보거나, 값을 더 바꿔 보세요.';changed3();});
+document.getElementById('book3').addEventListener('click',()=>{Object.assign(S3,{a:0,b:1,k:-3,p:2,q:4});a3.sync();b3.sync();k3.sync();
+  document.getElementById('t3hint').textContent='예시 문제 (접선의 기울기가 x−3이고 점 (2, 4)를 지나는 곡선)로 돌아왔어요.';changed3();});
+(()=>{const cv=document.getElementById('cv3');cv.addEventListener('pointerdown',e=>{if(!cv._V)return;const d=toData(cv,e);
+  S3.p=clamp(Math.round(d.x),-4,4);S3.q=clamp(Math.round(d.y),-30,30);changed3();});})();
+function render3(){
+  const f=f3(),F=integ(f),cur=withC(F,S3.C),h=evalP(cur,S3.p),cs=cStar();
+  document.getElementById('f3txt').innerHTML=fmtPoly(f);
+  document.getElementById('r3p').textContent=fmtN(S3.p);
+  document.getElementById('r3h').textContent=fmt(h,2);
+  document.getElementById('r3q').textContent=fmt(S3.q,0);
+  const near=Math.abs(h-S3.q)<=0.15, exact=Math.abs(S3.C-cs)<1e-9;
+  if(near&&exact&&!S3.solved){S3.solved=true;}
+  const fb=document.getElementById('fb3');
+  if(S3.solved&&exact){fb.className='feedback show good';fb.innerHTML='성공! 곡선이 점을 정확히 지나요. 도함수가 같은 무수히 많은 곡선 중에서 <b>하나</b>가 정해졌어요.';}
+  else if(near){fb.className='feedback show good';fb.innerHTML=`거의 맞았어요! <button class="btn small pz-btn pz-btn-primary" id="snap3" style="margin-left:6px">정확히 맞추기</button>`;
+    document.getElementById('snap3').onclick=()=>{S3.C=cs;S3.solved=true;c3.sync();render3();};}
+  else{fb.className='feedback show warn';fb.innerHTML=h<S3.q?'함숫값이 점의 y좌표보다 <b>작아요</b>. C를 키워 보세요.':'함숫값이 점의 y좌표보다 <b>커요</b>. C를 줄여 보세요.';}
+  const curves=[{fn:x=>evalP(cur,x),color:tok('--pz-f'),width:3.8}];
+  if(S3.solved) curves.unshift({fn:x=>evalP(F,x)+cs,color:tok('--pz-mint-line'),width:8,alpha:.35});
+  drawPlane(document.getElementById('cv3'),S3.V,{vlines:[{x:S3.p,color:tok('--pz-line2')}],curves,
+    endTags:[{fn:x=>evalP(cur,x),text:`C = ${fmtN(S3.C)}`,color:tok('--pz-sky-ink'),main:true}],
+    points:[{x:S3.p,y:h,color:tok('--pz-point'),r:6.5,hollow:true},{x:S3.p,y:S3.q,color:tok('--pz-ref'),r:7.5,label:`(${fmtN(S3.p)}, ${fmtN(S3.q)})`,labelColor:tok('--pz-accent-ink')}]});
+  document.getElementById('cap3').textContent=scaleCap(S3.V);
+  const rv=document.getElementById('reveal3');
+  if(S3.solved&&exact){
+    const ans=withC(F,cs);
+    S3.my={f:fmtPoly(f,'text'),p:S3.p,q:S3.q,F:fmtPoly(ans,'text'),C:fmtExactTxt(cs),poly:ans};
+    document.getElementById('myCard').innerHTML=`<p>접선의 기울기가 <span class="math">${fmtPoly(f)}</span>인 곡선 중에서<br>지나는 점이 <span class="math">(${fmtN(S3.p)}, ${fmtN(S3.q)})</span>인 곡선은</p>
+      <p class="formula" style="font-size:18px"><span class="math">y = ${fmtPoly(ans)}</span></p>
+      <p class="muted">도함수만 알면 부정적분은 <span class="math">${fmtPoly(F,'html','C')}</span>로 무수히 많지만, 지나는 점을 정하니 적분상수가 C = <span class="math">${fmtExact(cs)}</span>로 정해졌어요.</p>`;
+    rv.classList.add('show');markDone('t3');
+  }
+}
+
+/* ================= ④ 열린 질문 ================= */
+const FN4=[
+  {html:'10x<sup>9</sup>',pg:'',p:[0,0,0,0,0,0,0,0,0,10]},
+  {html:'x<sup>2</sup> + 3',p:[3,0,1]},
+  {html:'x<sup>2</sup> − 5',p:[-5,0,1]},
+  {html:'2x<sup>3</sup> + x + 7',p:[7,1,0,2]},
+];
+const S4={i:0,A:false,B:false};
+const fn4Box=document.getElementById('fn4');
+function buildFn4(){
+  fn4Box.innerHTML='';
+  const list=FN4.slice(); if(S3.my) list.push({html:'③ 나의 곡선',my:true});
+  list.forEach((f,i)=>{const b=document.createElement('button');b.className='chip'+(i===S4.i?' on':'');
+    b.innerHTML=`<span class="math">${f.html}</span>${f.pg?`<span class="pg">${f.pg}</span>`:''}`;
+    b.onclick=()=>{S4.i=i;S4.A=S4.B=false;buildFn4();render4();};fn4Box.appendChild(b);});
+}
+/* [버그수정] '③ 나의 곡선'이 마지막으로 푼 예(S3.my)가 아니라 ③의 현재(풀지 않은) 값으로 계산되던 문제 → 저장한 곡선 사용 */
+function fn4p(){ if(S4.i>=FN4.length&&S3.my){return S3.my.poly;} return FN4[Math.min(S4.i,FN4.length-1)].p; }
+function render4(){
+  const p=fn4p(),P=fmtPoly(p);
+  const A=[`<div class="box">${P}</div>`,`<div class="arrow">적분</div>`,`<div class="box ${S4.A?'':'hid'}">${fmtPoly(integ(p),'html','C')}</div>`,`<div class="arrow ${S4.A?'':'hid'}">미분</div>`,`<div class="box ok ${S4.A?'':'hid'}">${fmtPoly(deriv(integ(p)))}</div>`];
+  const d=deriv(p),back=integ(d);
+  const B=[`<div class="box">${P}</div>`,`<div class="arrow">미분</div>`,`<div class="box ${S4.B?'':'hid'}">${fmtPoly(d)}</div>`,`<div class="arrow ${S4.B?'':'hid'}">적분</div>`,`<div class="box huh ${S4.B?'':'hid'}">${fmtPoly(back,'html','C')}</div>`];
+  document.getElementById('pipeA').innerHTML=A.join('');
+  document.getElementById('pipeB').innerHTML=B.join('');
+  document.getElementById('cmp4').classList.toggle('show',S4.A&&S4.B);
+}
+document.getElementById('runA').onclick=()=>{S4.A=true;render4();};
+document.getElementById('runB').onclick=()=>{S4.B=true;render4();};
+const ans4=document.getElementById('ans4');
+ans4.addEventListener('input',()=>{
+  const t=ans4.value.trim(); const n=t?t.split(/[.!?。]+|\n+/).filter(s=>s.trim().length>1).length:0;
+  const c=document.getElementById('cnt4');
+  c.textContent=`${n}문장 · ${t.length}자`+(n>2?' — 1~2문장으로 줄여 볼까요?':(n>=1?' — 좋아요!':''));
+  c.style.color=n>2?'var(--warn)':'';
+  if(n>=1) markDone('t4');
+});
+document.getElementById('copy4').onclick=()=>{
+  const name=document.getElementById('name4').value.trim()||'(이름 없음)';
+  /* [2단계] 조사 오류("점 (3, 6)를") 대신 조사가 필요 없는 문장, 음수는 진짜 마이너스(−) */
+  const my=S3.my?`접선의 기울기가 ${S3.my.f}이고 지나는 점이 (${fmtN(S3.my.p)}, ${fmtN(S3.my.q)})인 곡선 → y = ${S3.my.F}`:'(아직 풀지 않음)';
+  const txt=`[부정적분 탐구] ${name}\n① 관찰: ${S1.solved?'완료':'미완료'}\n③ 내가 만든 예: ${my}\n④ 열린 질문 답: ${ans4.value.trim()||'(미작성)'}`;
+  const fallback=()=>{const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();
+    let ok=false;try{ok=document.execCommand('copy');}catch(_){}document.body.removeChild(ta);toast(ok?'복사했어요! 붙여 넣으세요.':'복사가 막혔어요. 길게 눌러 직접 복사해 주세요.');};
+  if(document.querySelector('.tabBtn[data-tab="t4"]').classList.contains('done')&&window.PastelUI) PastelUI.celebrate('3-1-t4');   // [2단계] ④ 완료 축하(복사 알림과 겹치지 않게 글 없이)
+  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(txt).then(()=>toast('복사했어요! 붙여 넣으세요.'),fallback);}else fallback();
+};
+
+/* ---------- 시작 ---------- */
+x1.sync();c2.sync();x2.sync();a3.sync();b3.sync();k3.sync();
+changed3();buildFn4();render4();render1();
+document.querySelector('.tabBtn[data-tab="t4"]').addEventListener('click',()=>{buildFn4();render4();});
+/* [UX] 처음 값으로: 그 탭의 슬라이더 값만 처음 값으로 되돌린다 (푼 기록·고른 함수는 그대로) */
+const INIT={x1:S1.x0, c2:S2.C, x2:S2.x0};
+const RESET={
+  t1(){S1.x0=INIT.x1;x1.sync();render1();},
+  t2(){const s=document.getElementById('x2s');S2.C=INIT.c2;S2.x0=clamp(INIT.x2,+s.min,+s.max);c2.sync();x2.sync();render2();}
+};
+document.querySelectorAll('[data-reset]').forEach(b=>b.addEventListener('click',()=>RESET[b.dataset.reset]()));
+</script>
+</body>
+</html>

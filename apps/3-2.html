@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>부호 있는 넓이 저울 · 정적분 탐구실</title>
+<style>
+/* [2단계 디자인] 공통 테마(복숭아 하늘) 적용. 글꼴·바탕은 테마(PZ 블록)가 정한다. */
+/* 앱 고유 변수 → 테마 토큰 연결 (하드코딩 색 금지) */
+:root{
+  --bg:var(--pz-bg); --panel:var(--pz-panel); --panelSoft:var(--pz-soft); --border:var(--pz-line); --borderSoft:var(--pz-line);
+  --textPrimary:var(--pz-ink); --textMuted:var(--pz-muted); --textFaint:var(--pz-muted);
+  --accent:var(--pz-accent-btn); --accentInk:var(--pz-accent-ink); --accentSoft:var(--pz-accent-soft); --accentLine:var(--pz-line2);
+  --pos:var(--pz-sky-ink); --posSoft:var(--pz-sky-soft); --neg:var(--pz-rose-ink); --negSoft:var(--pz-rose-soft);
+  --good:var(--pz-ok-ink); --goodSoft:var(--pz-ok-soft); --warn:var(--pz-warn-ink); --warnSoft:var(--pz-warn-soft);
+}
+*{box-sizing:border-box}
+body{margin:0;line-height:1.6;-webkit-text-size-adjust:100%}
+/* 한 줄 소개 + 탭 (상단 바가 단원·제목을 보여 주므로 앱 제목 h1은 지움) */
+.tabs{margin-bottom:16px}
+.tabBtn{white-space:nowrap}
+.tabBtn.done::after{content:" ✓";font-weight:800}
+.tabBtn.done:not(.active){color:var(--pz-ok-ink);box-shadow:0 0 0 2px var(--pz-mint) inset}
+/* 카드 */
+.card{background:var(--pz-panel);border:2px solid var(--pz-line);border-radius:var(--pz-r-lg);padding:18px 20px;margin-bottom:16px;box-shadow:var(--pz-shadow)}
+.cardHead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.page{display:inline-block;font-size:14px;font-weight:700;color:var(--pz-accent-ink);background:var(--pz-accent-soft);border-radius:var(--pz-r-pill);padding:5px 13px;line-height:1.35}
+.goal{display:inline-block;font-size:14px;font-weight:600;color:var(--pz-butter-ink);background:var(--pz-butter-soft);border-radius:var(--pz-r-pill);padding:5px 13px;line-height:1.35}
+h2{font-family:var(--pz-font-title);font-weight:400;font-size:21px;line-height:1.35;margin:0 0 8px;color:var(--pz-ink)}
+h3{font-family:var(--pz-font-title);font-weight:400;font-size:19px;line-height:1.35;margin:0 0 10px;color:var(--pz-ink)}
+p{margin:0 0 8px}
+.card p{font-size:15.5px}
+.muted,.card p.muted{color:var(--pz-muted);font-size:14.5px;line-height:1.6}
+.mono{font-family:var(--pz-mono)}
+.math{font-family:var(--pz-mono);font-weight:600;white-space:nowrap}
+.fr{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.78em;line-height:1.05;margin:0 1px}
+.fr>span:first-child{border-bottom:1.3px solid currentColor;padding:0 2px}
+sup{font-size:.7em}
+.int{display:inline-flex;align-items:center;font-family:var(--pz-mono);font-weight:600;white-space:nowrap;word-spacing:-.3em}
+.int .sg{font-size:1.5em;line-height:1;margin-right:1px;font-family:var(--pz-font-math);font-weight:400}
+.int .lim{display:inline-flex;flex-direction:column-reverse;font-size:.68em;line-height:1.15;margin-right:3px}
+.pos{color:var(--pos);font-weight:700}.neg{color:var(--neg);font-weight:700}
+.section{display:none}
+.section.show{display:block}
+/* ===== 탭 안 배치: 1099px 이하 = [문제 → 그래프 → 조작] 한 줄,
+         1100px 이상 = 왼쪽 [문제·조작] + 오른쪽 그래프(sticky) ===== */
+.split{display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"intro" "graph" "controls"}
+.split>*{min-width:0}
+.intro{grid-area:intro}.graphCol{grid-area:graph}.controls{grid-area:controls}
+@media (min-width:1100px){
+  .split{grid-template-columns:minmax(340px,1fr) minmax(0,1.35fr);grid-template-areas:"intro graph" "controls graph" ". graph";grid-template-rows:auto auto 1fr;column-gap:20px}
+  .graphCol{position:sticky;top:calc(var(--pz-topbar-h) + 12px);align-self:start}
+}
+/* 그래프 카드 — 주의: 맨 canvas 선택자는 축하(컨페티) 캔버스까지 덮으므로 .plane 안으로 한정 */
+.graphCard{padding:14px 16px 10px}
+.plane{width:100%;position:relative}
+.plane canvas{display:block;margin:0 auto;touch-action:pan-y;cursor:ew-resize;border-radius:var(--pz-r-md)}
+.planeCap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 10px;font-size:13.5px;color:var(--pz-muted);margin:6px 2px 8px;line-height:1.45}
+.planeCap:last-child{margin-bottom:0}
+/* 슬라이더: 꾸밈은 테마(:where 규칙)가 맡는다 */
+.sliderRow{display:flex;align-items:center;gap:12px;margin:6px 0 12px}
+.sliderRow label{flex:0 0 auto;font-weight:600;font-size:15px;min-width:84px;color:var(--pz-ink2)}
+input[type=range]{flex:1;min-width:0;margin:0}
+.miniInput{width:84px;padding:9px 8px;text-align:center}   /* 테두리·모서리·글꼴·포커스는 theme.css */
+.nameIn:focus,textarea:focus{outline:none;border-color:var(--pz-accent);box-shadow:0 0 0 3px var(--pz-accent-soft)}
+/* 버튼 모양은 theme.css의 .pz-btn(-primary/-soft/-ghost). 여기는 터치 크기·간격만 */
+.btn{min-height:44px;margin-bottom:5px}
+.btn.small{font-size:15px;padding:8px 15px;min-height:40px}
+.btnRow{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+/* 선택지 토글 = .pz-chip 모양 */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 10px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:7px 14px;border-radius:var(--pz-r-pill);border:2px solid var(--pz-line);background:var(--pz-panel);color:var(--pz-ink2);font:600 15px/1.2 var(--pz-font);cursor:pointer;min-height:40px}
+.chip:hover{border-color:var(--pz-accent)}
+.chip .pg{font-size:13px;color:var(--pz-muted);margin-left:4px;font-weight:500}
+.chip.on{background:var(--pz-accent-soft);border-color:var(--pz-accent);color:var(--pz-accent-ink);font-weight:700}
+/* 피드백 = .pz-feedback 모양 (정답 민트 ✓ / 힌트 버터 💡) */
+.feedback{border-radius:var(--pz-r-md);padding:12px 14px;margin-top:10px;font-size:15.5px;font-weight:600;line-height:1.55;display:none}
+.feedback.show{display:block}
+.feedback.good{background:var(--pz-ok-soft);color:var(--pz-ok-ink)}
+.feedback.good::before{content:"✓ ";font-weight:800}
+.feedback.warn{background:var(--pz-warn-soft);color:var(--pz-warn-ink)}
+.feedback.warn::before{content:"💡 "}
+.feedback .btn{margin:6px 0 5px 4px;vertical-align:middle}
+.reveal{display:none}
+.reveal.show{display:block;animation:pop .35s ease}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.formula{font-size:15.5px;margin:6px 0}
+.formula .math{font-size:17px}
+.ansRow{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:8px 0}
+.ansRow label{font-weight:700;font-size:16px}
+/* 양/음 넓이 칸: 색 + 기호(+/−) */
+.scale{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 8px}
+.scale div{border-radius:var(--pz-r-md);padding:9px 12px;font-size:14px;line-height:1.4}
+.scale .p{background:var(--pz-sky-soft);color:var(--pz-sky-ink)}.scale .n{background:var(--pz-rose-soft);color:var(--pz-rose-ink)}
+.scale .p::before,.scale .n::before{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;color:#fff;font-weight:800;font-size:15px;line-height:1;margin-right:6px;vertical-align:-4px}
+.scale .p::before{content:"+";background:var(--pz-sky-line)}
+.scale .n::before{content:"−";background:var(--pz-coral-line)}
+.scale b{display:block;font-family:var(--pz-mono);font-size:20px;margin-top:2px}
+.total{background:var(--pz-accent-soft);border-radius:var(--pz-r-md);padding:11px 14px;font-size:15.5px;margin:4px 0 8px;line-height:1.7}
+.total b.mono{font-size:20px}
+.defs{display:grid;gap:8px}
+.def{background:var(--pz-soft);border-radius:var(--pz-r-md);padding:11px 14px;font-size:15.5px;line-height:1.65}
+.check{display:flex;gap:10px;align-items:flex-start;padding:7px 0;font-size:15.5px;cursor:pointer;line-height:1.55}
+.check input{width:22px;height:22px;flex:0 0 auto;margin-top:1px;accent-color:var(--pz-accent-btn)}
+.myList{display:grid;gap:8px}
+.myItem{border:2px dashed var(--pz-line2);border-radius:var(--pz-r-md);padding:10px 14px;background:var(--pz-panel);font-size:15px;line-height:1.6}
+textarea,.nameIn{width:100%;font-family:inherit;font-size:16px;border:2px solid var(--pz-line);border-radius:var(--pz-r-input);padding:12px;color:var(--pz-ink);background:var(--pz-panel)}
+textarea{min-height:110px;resize:vertical}
+.counter{font-size:13.5px;color:var(--pz-muted);margin-top:4px}
+.question{font-size:17px;font-weight:700;line-height:1.55;margin:4px 0 10px}
+details{margin-top:6px}
+summary{cursor:pointer;font-weight:700;color:var(--pz-accent-ink);font-size:15px;padding:4px 0}
+.tbl{width:100%;border-collapse:collapse;font-size:14.5px;margin-top:8px}
+.tbl th,.tbl td{border-bottom:2px solid var(--pz-line);padding:8px 6px;text-align:left;vertical-align:top}
+.tbl th{color:var(--pz-muted);font-weight:700;font-size:13.5px}
+/* 앱 알림(복사·저장 안내) — 테마 알림(.pz-toast)과 같은 모양, 축하 알림과 겹치지 않게 조금 위에 */
+.toast{position:fixed;left:50%;bottom:86px;transform:translate(-50%,10px);background:var(--pz-panel);color:var(--pz-ink);border:2px solid var(--pz-line);padding:11px 20px;border-radius:var(--pz-r-pill);font:700 15px/1.4 var(--pz-font);box-shadow:var(--pz-shadow);opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:1940;max-width:calc(100vw - 32px);text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.footer{text-align:center;font-size:13px;color:var(--pz-muted);margin-top:24px}
+</style>
+<!-- PZ:HEAD -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../shared/theme.css">
+<script type="application/json" id="pz-meta">{"slug": "3-2", "unit": "3-2", "title": "정적분의 뜻", "group": null, "home": "../index.html", "guide": "../guides/3-2.html"}</script>
+<script id="pz-ui" src="../shared/ui.js"></script>
+<!-- /PZ:HEAD -->
+</head>
+<body>
+<div class="wrap pz-wrap">
+<!-- [2단계] 상단 바가 단원·제목을 보여 주므로 앱 제목(h1)은 지우고 한 줄 소개만 남김 -->
+<p class="desc pz-desc">⚖️ 부호 있는 넓이 저울 · 미적분Ⅰ Ⅲ-1 정적분 · x축 위쪽은 양의 넓이(+), x축 아래쪽은 음의 넓이(−)로 세기</p>
+
+<nav class="tabs pz-tabs" role="tablist">
+  <button class="tabBtn pz-tab active" data-tab="t1" role="tab" aria-selected="true">1. 관찰</button>
+  <button class="tabBtn pz-tab" data-tab="t2" role="tab" aria-selected="false">2. 조작</button>
+  <button class="tabBtn pz-tab" data-tab="t3" role="tab" aria-selected="false">3. 내 예</button>
+  <button class="tabBtn pz-tab" data-tab="t4" role="tab" aria-selected="false">4. 질문</button>
+</nav>
+
+<!-- ================= ① 관찰 ================= -->
+<section class="section show" id="t1">
+ <div class="split">
+  <div class="intro">
+   <div class="card">
+    <div class="cardHead"><span class="page">개념 탐구</span><span class="goal">🎯 S₁, S₂를 맞히면 ✓</span></div>
+    <h2>두 도형의 넓이를 구해 보자</h2>
+    <p>함수 <span class="math">y = x</span>의 그래프와 x축 및 직선 <span class="math">x = 2</span>로 둘러싸인 도형의 넓이를 <b>S<sub>1</sub></b>, 함수 <span class="math">y = −x</span>의 그래프와 x축 및 직선 <span class="math">x = 2</span>로 둘러싸인 도형의 넓이를 <b>S<sub>2</sub></b>라고 하자.</p>
+    <div class="chips" id="obsChips">
+     <button class="chip on" data-k="0"><span class="math">y = x</span></button>
+     <button class="chip" data-k="1"><span class="math">y = −x</span></button>
+     <button class="chip" data-k="2">둘 다 보기</button>
+    </div>
+   </div>
+  </div>
+  <div class="graphCol card graphCard">
+   <div class="plane"><canvas id="cv1" aria-label="직선 y = x, y = −x와 x축, 직선 x = 2로 둘러싸인 도형"></canvas></div>
+   <div class="planeCap"><span>파랑(+): x축 위쪽 도형 · 산호색(−): x축 아래쪽 도형</span><span id="cap1"></span></div>
+  </div>
+  <div class="controls">
+   <div class="card">
+    <h3>넓이 구하기</h3>
+    <div class="ansRow"><label>S<sub>1</sub> =</label><input type="number" class="miniInput" id="s1in" step="0.5"><label style="margin-left:8px">S<sub>2</sub> =</label><input type="number" class="miniInput" id="s2in" step="0.5"></div>
+    <div class="btnRow"><button class="btn pz-btn pz-btn-primary" id="check1">확인!</button></div>
+    <div class="feedback" id="fb1"></div>
+   </div>
+   <div class="card reveal" id="reveal1">
+    <h3>✨ 넓이는 같은데, 정적분은 부호가 달라요</h3>
+    <div class="defs">
+     <div class="def"><b>➊ f(x) ≥ 0일 때</b> — 곡선 y = f(x)와 x축 및 두 직선 x = a, x = b로 둘러싸인 도형의 넓이를 f(x)의 a에서 b까지의 <b><span class="pz-term" data-tip="정적분">정적분</span></b>이라 하고 <span class="int" id="d1"></span>와 같이 나타내요.<br>→ <span class="int" id="d1b"></span> <span class="pos">= S<sub>1</sub> = 2</span></div>
+     <div class="def"><b>➋ f(x) ≤ 0일 때</b> — 도형의 넓이가 S이면 정적분은 음의 넓이 <b>−S</b>로 정의해요.<br>→ <span class="int" id="d2b"></span> <span class="neg">= −S<sub>2</sub> = −2</span></div>
+    </div>
+    <p class="muted" style="margin-top:8px">정적분은 넓이에 <b>부호</b>가 붙은 값이에요. x축 위쪽 넓이는 <b>양의 넓이(+)</b>, x축 아래쪽 넓이는 <b>음의 넓이(−)</b>로 셉니다.</p>
+    <div class="btnRow"><button class="btn ghost small pz-btn pz-btn-ghost" data-go="t2">2. 조작으로 가기 →</button></div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ================= ② 조작 ================= -->
+<section class="section" id="t2">
+ <div class="split">
+  <div class="intro">
+   <div class="card">
+    <div class="cardHead"><span class="page">정적분의 정의 ➌ · 아래끝과 위끝</span><span class="goal">🎯 ⇄ a와 b를 바꿔 보면 ✓</span></div>
+    <h2>그래프가 x축을 가로지르면 정적분은?</h2>
+    <p>함수가 양의 값과 음의 값을 모두 가질 때, f(x) &gt; 0인 부분의 넓이를 <span class="pos">S<sub>1</sub></span>, f(x) &lt; 0인 부분의 넓이를 <span class="neg">S<sub>2</sub></span>라고 하면 <span class="pz-term" data-tip="정적분">정적분</span>은 양의 넓이 S<sub>1</sub>과 음의 넓이 −S<sub>2</sub>를 합한 <b>S<sub>1</sub> − S<sub>2</sub></b>예요.</p>
+    <p class="muted">예시로 시작하거나, 직선과 a, b를 직접 바꿔 보세요.</p>
+    <div class="chips" id="presets2"></div>
+   </div>
+  </div>
+  <div class="graphCol card graphCard">
+   <div class="plane"><canvas id="cv2" aria-label="직선 y = f(x)와 x = a, x = b 사이의 양의 넓이·음의 넓이"></canvas></div>
+   <div class="planeCap"><span>그래프를 좌우로 끌면 가까운 쪽의 a 또는 b가 움직여요</span><span id="cap2"></span></div>
+  </div>
+  <div class="controls">
+   <div class="card">
+    <div class="formula">함수: <span class="math" id="f2txt"></span></div>
+    <div class="sliderRow"><label>기울기</label><input type="range" id="m2s"><input type="number" id="m2n" class="miniInput"></div>
+    <div class="sliderRow"><label>y절편</label><input type="range" id="n2s"><input type="number" id="n2n" class="miniInput"></div>
+    <div class="sliderRow"><label><span class="pz-term" data-tip="아래끝" data-tip-text="정적분 ∫ₐᵇ f(x)dx에서 ∫ 아래쪽에 쓰는 a를 아래끝이라 해요. 적분하는 구간이 시작하는 값이에요.">아래끝</span> a</label><input type="range" id="a2s"><input type="number" id="a2n" class="miniInput"></div>
+    <div class="sliderRow"><label><span class="pz-term" data-tip="위끝" data-tip-text="정적분 ∫ₐᵇ f(x)dx에서 ∫ 위쪽에 쓰는 b를 위끝이라 해요. 적분하는 구간이 끝나는 값이에요.">위끝</span> b</label><input type="range" id="b2s"><input type="number" id="b2n" class="miniInput"></div>
+    <div class="btnRow"><button class="btn small pz-btn pz-btn-ghost resetBtn" data-reset="t2">↺ 처음 값으로</button></div>
+    <div class="scale">
+     <div class="p">S<sub>1</sub> (x축 위쪽 넓이)<b id="r2s1"></b></div>
+     <div class="n">S<sub>2</sub> (x축 아래쪽 넓이)<b id="r2s2"></b></div>
+    </div>
+    <div class="total" id="r2tot"></div>
+    <p class="muted" id="r2note"></p>
+    <div class="btnRow"><button class="btn soft small pz-btn pz-btn-soft" id="swap2">⇄ a와 b 바꾸기</button></div>
+   </div>
+   <div class="card">
+    <h3>관찰 체크 ✔</h3>
+    <label class="check"><input type="checkbox"><span>그래프가 x축 위쪽에 있는 부분의 넓이는 더하고, 아래쪽에 있는 부분의 넓이는 뺀다</span></label>
+    <label class="check"><input type="checkbox"><span>아래끝과 위끝을 바꾸면 정적분의 <b>부호</b>가 바뀐다 (a &gt; b일 때의 정의)</span></label>
+    <label class="check"><input type="checkbox"><span>a = b이면 정적분의 값은 0이다</span></label>
+    <label class="check"><input type="checkbox"><span>정적분의 값과 도형의 넓이(S<sub>1</sub> + S<sub>2</sub>)가 다른 경우를 찾았다</span></label>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ================= ③ 내가 만든 예 ================= -->
+<section class="section" id="t3">
+ <div class="split">
+  <div class="intro">
+   <div class="card">
+    <div class="cardHead"><span class="page">미션 · 정의 ➌ → 생각 넓히기로 연결</span><span class="goal">🎯 기울기가 다른 예 2개를 저장하면 ✓</span></div>
+    <h2>정적분은 0인데, 넓이는 0이 아닌 그래프 만들기</h2>
+    <p>직선의 기울기, y절편, <span class="pz-term" data-tip="아래끝" data-tip-text="정적분 ∫ₐᵇ f(x)dx에서 ∫ 아래쪽에 쓰는 a를 아래끝이라 해요. 적분하는 구간이 시작하는 값이에요.">아래끝</span> a, <span class="pz-term" data-tip="위끝" data-tip-text="정적분 ∫ₐᵇ f(x)dx에서 ∫ 위쪽에 쓰는 b를 위끝이라 해요. 적분하는 구간이 끝나는 값이에요.">위끝</span> b를 정해서 <b><span class="pz-term" data-tip="정적분">정적분</span>의 값은 0</b>이지만 <b>도형의 넓이는 0이 아닌</b> 예를 만들어 보세요.</p>
+    <p class="muted">하나를 만들면 저장돼요. 기울기가 다른 예를 하나 더 만들어 보세요.</p>
+   </div>
+  </div>
+  <div class="graphCol card graphCard">
+   <div class="plane"><canvas id="cv3" aria-label="내가 만든 직선과 x = a, x = b 사이의 양의 넓이·음의 넓이"></canvas></div>
+   <div class="planeCap"><span>그래프를 좌우로 끌면 가까운 쪽의 a 또는 b가 움직여요</span><span id="cap3"></span></div>
+  </div>
+  <div class="controls">
+   <div class="card">
+    <div class="formula">함수: <span class="math" id="f3txt"></span></div>
+    <div class="sliderRow"><label>기울기</label><input type="range" id="m3s"><input type="number" id="m3n" class="miniInput"></div>
+    <div class="sliderRow"><label>y절편</label><input type="range" id="n3s"><input type="number" id="n3n" class="miniInput"></div>
+    <div class="sliderRow"><label>아래끝 a</label><input type="range" id="a3s"><input type="number" id="a3n" class="miniInput"></div>
+    <div class="sliderRow"><label>위끝 b</label><input type="range" id="b3s"><input type="number" id="b3n" class="miniInput"></div>
+    <div class="btnRow"><button class="btn small pz-btn pz-btn-ghost resetBtn" data-reset="t3">↺ 처음 값으로</button></div>
+    <div class="scale">
+     <div class="p">S<sub>1</sub><b id="r3s1"></b></div>
+     <div class="n">S<sub>2</sub><b id="r3s2"></b></div>
+    </div>
+    <div class="total" id="r3tot"></div>
+    <div class="feedback" id="fb3"></div>
+   </div>
+   <div class="card reveal" id="reveal3">
+    <h3>📝 내가 만든 예</h3>
+    <div class="myList" id="myList"></div>
+    <p class="muted" style="margin-top:10px">🔗 생각 넓히기: “<span class="int" id="q117a"></span> = <span class="int" id="q117b"></span>는 a = b일 때만 성립해.”라는 말은 참일까요? 지금 만든 예에서 <b>⇄ a와 b 바꾸기</b>를 눌러 확인해 보세요.</p>
+    <div class="btnRow"><button class="btn soft small pz-btn pz-btn-soft" id="swap3">⇄ a와 b 바꾸기</button></div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ================= ④ 열린 질문 ================= -->
+<section class="section" id="t4">
+ <div class="split">
+  <div class="intro">
+   <div class="card">
+    <div class="cardHead"><span class="page">정적분의 정의 ➋·➌</span><span class="goal">🎯 1문장 이상 쓰면 ✓</span></div>
+    <h2>왜 x축 아래쪽 넓이는 ‘빼는’ 걸까?</h2>
+    <p><span class="pz-term" data-tip="정적분">정적분</span>에서는 x축 위쪽 도형의 넓이는 양의 넓이로 더하고, x축 아래쪽 도형의 넓이는 음의 넓이로 세어 빼요. 이렇게 빼는 것이 자연스러운 상황이 생활 속에도 있을까요?</p>
+   </div>
+  </div>
+  <div class="graphCol">
+   <div class="card">
+    <h3>정적분을 한 줄로 정리하면</h3>
+    <div class="total" style="font-size:16px">정적분 = <span class="pos">(양의 넓이)</span> + <span class="neg">(음의 넓이)</span> = <span class="pos">(x축 위쪽 넓이)</span> − <span class="neg">(x축 아래쪽 넓이)</span></div>
+    <p class="muted">③에서 만든 예처럼, 위쪽과 아래쪽이 같으면 서로 상쇄되어 정적분이 0이 돼요.</p>
+   </div>
+  </div>
+  <div class="controls">
+   <div class="card">
+    <span class="page">🤔 열린 질문</span>
+    <p class="question">x축 아래쪽 도형의 넓이를 ‘빼는’ 것이 자연스러운 상황을 생활 속에서 하나 찾아, 1~2문장으로 설명해 보세요.</p>
+    <p class="muted">정답은 하나가 아니에요. 무엇이 x축 위쪽(+)이고 무엇이 아래쪽(−)인지 드러나게 써 보세요.</p>
+    <details>
+     <summary>생각 도우미 (막힐 때만 열기)</summary>
+     <p class="muted" style="margin-top:6px">· 서로 반대 방향인 두 가지가 섞여 있는 상황은 무엇이 있을까요?<br>· 둘을 따로따로 더한 값과, 반대 방향을 뺀 값 중 무엇이 더 궁금한 상황일까요?</p>
+    </details>
+    <input class="nameIn" id="name4" placeholder="학번 · 이름 (예: 20512 김강원)" style="margin:10px 0 8px">
+    <textarea id="ans4" placeholder="내 생각을 1~2문장으로 써 보세요."></textarea>
+    <div class="counter" id="cnt4">0문장 · 0자</div>
+    <div class="btnRow"><button class="btn pz-btn pz-btn-primary" id="copy4">📋 제출용으로 복사하기</button></div>
+    <p class="muted" style="margin-top:8px">복사한 내용을 선생님이 안내한 곳(패들렛 등)에 붙여 넣으세요. ③에서 만든 예도 함께 복사돼요.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<div class="card" style="margin-top:20px">
+ <details>
+  <summary>선생님용 · 활동 안내표</summary>
+  <table class="tbl">
+   <tr><th>탭</th><th>다루는 개념</th><th>학생이 하는 일</th></tr>
+   <tr><td>① 관찰</td><td>y = x, y = −x와 x = 2로 둘러싸인 도형의 넓이 S<sub>1</sub>, S<sub>2</sub></td><td>삼각형 넓이로 S<sub>1</sub> = S<sub>2</sub> = 2를 구한 뒤 정의 ➊·➋로 정적분 2, −2 확인</td></tr>
+   <tr><td>② 조작</td><td>정의 ➌, a = b·a &gt; b일 때의 정의</td><td>직선과 a, b를 조절하며 S<sub>1</sub> − S<sub>2</sub> 관찰, a와 b를 바꿔 부호 반전 확인 (예시 1·2: 6, −6 / 예시 3·4: 16, −3)</td></tr>
+   <tr><td>③ 내 예</td><td>계획표 미션 + 생각 넓히기(∫<sub>a</sub><sup>b</sup> = ∫<sub>b</sub><sup>a</sup>는 a = b일 때만?)</td><td>정적분 0, 넓이 ≠ 0인 직선과 구간을 2개 만들기 → a, b를 바꿔도 값이 같은 반례 발견</td></tr>
+   <tr><td>④ 열린 질문</td><td>정의 ➋·➌ (음의 넓이의 의미)</td><td>x축 아래 넓이를 빼는 것이 자연스러운 생활 상황을 1~2문장으로 설명 → 복사해 제출</td></tr>
+  </table>
+  <p class="muted" style="margin-top:8px">열린 질문 예상 답 유형: 수입과 지출(잔액) / 물이 들어오고 나감(저수지 수량 변화) / 앞으로 간 거리와 뒤로 간 거리(위치 변화 — 속도와 거리로 연결) / 오른 기온과 내린 기온 / 충전과 방전. 이 단계는 F(b) − F(a)를 배우기 전이므로 직선(삼각형·사다리꼴 넓이)만 다룹니다.</p>
+ </details>
+</div>
+
+<p class="footer">✏️ made by 지인섭</p>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- 수 표시 도구 ---------- */
+function frac(v){
+  const r=Math.round(v); if(Math.abs(v-r)<1e-9) return {n:r,d:1};
+  for(let d=2;d<=96;d++){const n=v*d; if(Math.abs(n-Math.round(n))<1e-7) return {n:Math.round(n),d};}
+  return null;
+}
+const fmt=(v,d=1)=>{let s=v.toFixed(d); if(/^-0(\.0+)?$/.test(s)) s=s.slice(1); return s.replace('-','−');};
+const fmtExact=v=>{if(Math.abs(v)<1e-12)v=0;const f=frac(v); if(f&&f.d>1) return (f.n<0?'−':'')+`<span class="fr"><span>${Math.abs(f.n)}</span><span>${f.d}</span></span>`; if(f) return fmt(f.n,0); return fmt(v,2);};
+const fmtExactTxt=v=>{if(Math.abs(v)<1e-12)v=0;const f=frac(v); if(f&&f.d>1) return (f.n<0?'−':'')+`${Math.abs(f.n)}/${f.d}`; if(f) return fmt(f.n,0); return fmt(v,2);};
+function coefHTML(a,txt){ // 계수(1, −1 생략)
+  if(Math.abs(a-1)<1e-12) return ''; if(Math.abs(a+1)<1e-12) return '−';
+  return txt?fmtExactTxt(a).replace(/(\d+\/\d+)/,'($1)'):fmtExact(a); // [1단계 수정] 텍스트 분수 계수는 괄호로: −(1/2)x
+}
+function lineStr(m,n,txt=false){
+  let s='';
+  if(Math.abs(m)>1e-12) s+=coefHTML(m,txt)+'x';
+  if(Math.abs(n)>1e-12||!s){
+    if(!s) s=txt?fmtExactTxt(n):fmtExact(n);
+    else s+=(n<0?' − ':' + ')+(txt?fmtExactTxt(Math.abs(n)):fmtExact(Math.abs(n)));
+  }
+  return 'y = '+s;
+}
+function intHTML(a,b,body){
+  return `<span class="sg">∫</span><span class="lim"><span>${a}</span><span>${b}</span></span>${body}`;
+}
+const paren=v=>v<0?`(${fmtExact(v)})`:fmtExact(v);
+// [1단계 수정] 수 뒤 조사: 읽을 때 마지막 숫자가 2·4·5·9(이·사·오·구)면 '예요', 아니면 '이에요' (분수는 분자가 마지막에 읽힘)
+const ieyo=v=>{const f=frac(Math.abs(v));const s=f?String(f.n):Math.abs(v).toFixed(2);return /[2459]$/.test(s)?'예요':'이에요';};
+
+/* ---------- 넓이 계산 (직선: 부호가 바뀌는 점에서 나눠 사다리꼴로) ---------- */
+function regions(m,n,a,b){
+  const lo=Math.min(a,b),hi=Math.max(a,b),f=x=>m*x+n;
+  const cuts=[lo];
+  if(Math.abs(m)>1e-12){const r=-n/m; if(r>lo+1e-12&&r<hi-1e-12) cuts.push(r);}
+  cuts.push(hi);
+  const out=[];
+  for(let i=0;i<cuts.length-1;i++){
+    const u=cuts[i],v=cuts[i+1]; if(v-u<1e-12) continue;
+    const s=(f(u)+f(v))/2*(v-u);
+    out.push({u,v,signed:s,area:Math.abs(s),sign:s>1e-12?1:(s<-1e-12?-1:0)});
+  }
+  return out;
+}
+function summary(m,n,a,b){
+  const R=regions(m,n,a,b);
+  const S1=R.filter(r=>r.sign>0).reduce((t,r)=>t+r.area,0);
+  const S2=R.filter(r=>r.sign<0).reduce((t,r)=>t+r.area,0);
+  const dir=a<=b?1:-1;
+  return {R,S1,S2,val:dir*(S1-S2),dir};
+}
+
+/* ---------- [2단계] 테마 색·확대 비율·그래프 크기 ---------- */
+/* 테마 색 읽기: 그래프 의미 색은 모두 --pz-* 토큰에서 (PastelUI.color). PastelUI가 없을 때는 CSS 변수를 직접 읽는다. */
+function tok(name){
+  if(window.PastelUI) return PastelUI.color(name);
+  let v=getComputedStyle(document.documentElement).getPropertyValue(name).trim(),g=0;
+  while(/^var\(/.test(v)&&g++<6) v=getComputedStyle(document.documentElement).getPropertyValue(v.replace(/^var\(\s*|\s*\)$/g,'')).trim();
+  return v||'#888';
+}
+/* #pz-main 의 CSS zoom(글자 크기) 비율: 화면 px ÷ CSS px */
+function cssScale(el){const r=el.getBoundingClientRect();return (el.clientWidth>0&&r.width>0)?r.width/el.clientWidth:1;}
+const SPLIT_MQ=window.matchMedia('(min-width:1100px)');
+const CF='"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+function pal(){return {panel:tok('--pz-panel'),grid:tok('--pz-grid'),axis:tok('--pz-axis'),muted:tok('--pz-muted'),faint:tok('--pz-faint'),
+  f:tok('--pz-f'),fInk:tok('--pz-sky-ink'),g:tok('--pz-g'),gInk:tok('--pz-lav-ink'),ref:tok('--pz-ref'),point:tok('--pz-point'),pointInk:tok('--pz-accent-ink'),
+  posFill:tok('--pz-pos-fill'),negFill:tok('--pz-neg-fill'),posInk:tok('--pz-sky-ink'),negInk:tok('--pz-rose-ink'),posLine:tok('--pz-sky-line'),negLine:tok('--pz-coral-line')};}
+/* 흰 테두리(halo)를 두른 글자 — 선·색칠 위에서도 읽히게 */
+function haloText(ctx,t,x,y,color,align){ctx.save();ctx.textAlign=align||'center';ctx.lineJoin='round';ctx.lineWidth=5;ctx.strokeStyle='rgba(255,255,255,.95)';ctx.strokeText(t,x,y);ctx.fillStyle=color;ctx.fillText(t,x,y);ctx.restore();}
+/* 양의 넓이(+)·음의 넓이(−) 기호 동그라미 */
+function signBadge(ctx,x,y,sign,color){ctx.save();ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();ctx.lineWidth=2.5;ctx.strokeStyle='#fff';ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font=`800 16px ${CF}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(sign>0?'+':'−',x,y+1);ctx.restore();}
+/* 그래프 최대 높이(CSS px): 1100px 이상(스플릿)에서는 그래프 카드가 처음 화면(스크롤 0)과 sticky 상태 모두에서 다 보이게,
+   그 아래(한 줄)에서는 상단 바 아래 화면의 85% 안에 그래프 카드가 들어가게. 글자 크기(zoom)를 반영한다. */
+function planeMaxH(cv){
+  const col=cv.closest('.graphCol'); if(!col) return 99999;
+  const k=cssScale(col),vh=window.innerHeight,cvs=[...col.querySelectorAll('canvas')];
+  const chrome=col.getBoundingClientRect().height-cvs.reduce((t,c)=>t+c.getBoundingClientRect().height,0);
+  const bar=(document.querySelector('.pz-topbar')||{offsetHeight:64}).offsetHeight;
+  let tot;
+  if(SPLIT_MQ.matches){
+    const top0=col.parentElement.getBoundingClientRect().top+window.scrollY;   // sticky와 무관한 탭 위끝
+    tot=Math.min(vh-Math.min(top0,vh*0.45)-chrome-16, vh-bar-12*k-chrome-20);
+  } else tot=(vh-bar)*0.85-chrome;
+  return Math.max(cvs.length>1?150:260, tot/k/cvs.length);
+}
+
+/* ---------- 좌표평면 렌더러 (한 칸 = 정사각형) ---------- */
+function drawPlane(cv,V,L={}){
+  const W=cv.parentElement.clientWidth; if(!W) return;
+  const cols=(V.xMax-V.xMin)/V.xStep, rows=(V.yMax-V.yMin)/V.yStep;
+  // [2단계] 한 칸 = 정사각형은 그대로 두고, 화면 높이를 넘으면 너비를 줄여 가운데에 둔다
+  let w=W,h=Math.round(w*rows/cols); const maxH=planeMaxH(cv);
+  if(h>maxH){h=Math.round(maxH);w=Math.round(h*cols/rows);}
+  const dpr=(window.devicePixelRatio||1)*cssScale(cv.parentElement);   // 글자 크기(zoom)만큼 해상도도 올려 선명하게
+  cv.style.width=w+'px'; cv.style.height=h+'px'; cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  const X=x=>(x-V.xMin)/(V.xMax-V.xMin)*w, Y=y=>(V.yMax-y)/(V.yMax-V.yMin)*h;
+  const C=pal(), cell=w/cols;
+  cv._V=V;
+  ctx.fillStyle=C.panel; ctx.fillRect(0,0,w,h);
+  // 색칠 영역 (양의 넓이 = --pz-pos-fill, 음의 넓이 = --pz-neg-fill: 토큰 자체가 반투명)
+  (L.fills||[]).forEach(F=>{ctx.save();ctx.fillStyle=F.color;ctx.globalAlpha=F.alpha??1;ctx.beginPath();
+    F.pts.forEach((p,i)=>i?ctx.lineTo(X(p[0]),Y(p[1])):ctx.moveTo(X(p[0]),Y(p[1])));ctx.closePath();ctx.fill();ctx.restore();});
+  ctx.strokeStyle=C.grid; ctx.lineWidth=1;
+  for(let i=0;i<=cols;i++){const px=Math.round(X(V.xMin+i*V.xStep))+.5;ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,h);ctx.stroke();}
+  for(let i=0;i<=rows;i++){const py=Math.round(Y(V.yMin+i*V.yStep))+.5;ctx.beginPath();ctx.moveTo(0,py);ctx.lineTo(w,py);ctx.stroke();}
+  ctx.strokeStyle=C.axis; ctx.lineWidth=1.6;
+  const ax=X(0), ay=Y(0);
+  ctx.beginPath();ctx.moveTo(0,ay);ctx.lineTo(w,ay);ctx.moveTo(ax,0);ctx.lineTo(ax,h);ctx.stroke();
+  const fs=w<420?12:13;
+  ctx.font=`600 ${fs}px ${CF}`;
+  // [2단계] a·b 손잡이 바로 아래의 눈금 숫자는 손잡이 이름표(a = …)와 겹치므로 생략
+  const hx=(L.handles||[]).map(hd=>hd.x), nearH=k=>hx.some(x=>Math.abs(x-k)<0.6);
+  for(let k=Math.ceil(V.xMin)+1;k<V.xMax;k++){ if(k===0||nearH(k)) continue; haloText(ctx,fmt(k,0),X(k),ay+fs+5,C.muted,'center'); }
+  for(let k=Math.ceil(V.yMin)+1;k<V.yMax;k++){ if(k===0) continue; haloText(ctx,fmt(k,0),ax-6,Y(k)+4,C.muted,'right'); }
+  if(!nearH(0)) haloText(ctx,'O',ax-5,ay+fs+5,C.muted,'right');
+  // 세로선 x=a, x=b
+  (L.vlines||[]).forEach(v=>{ctx.save();ctx.setLineDash([6,5]);ctx.strokeStyle=v.color||C.faint;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(X(v.x),0);ctx.lineTo(X(v.x),h);ctx.stroke();ctx.restore();});
+  // 그래프 (직선) + 이름표
+  (L.lines||[]).forEach(c=>{ctx.save();ctx.strokeStyle=c.color;ctx.lineWidth=c.width||3.5;ctx.lineCap='round';ctx.globalAlpha=c.alpha??1;ctx.beginPath();
+    const x0=V.xMin-1,x1=V.xMax+1;ctx.moveTo(X(x0),Y(c.m*x0+c.n));ctx.lineTo(X(x1),Y(c.m*x1+c.n));ctx.stroke();ctx.restore();
+    if(c.label){ctx.save();ctx.font=`700 ${fs+2}px ${CF}`;
+      let lx=c.lx??(V.xMax-1.6), ly=c.m*lx+c.n; if(ly>V.yMax-.6){lx=(V.yMax-.8-c.n)/c.m;ly=V.yMax-.8;} if(ly<V.yMin+.6){lx=(V.yMin+.8-c.n)/c.m;ly=V.yMin+.8;}
+      haloText(ctx,c.label,X(lx)-6,Y(ly)-8,c.labelColor||c.color,'right');ctx.restore();}});
+  // 넓이 글자: 기호 동그라미(+/−) + 이름(S₁=…). x축 눈금·손잡이 이름표와 겹치지 않게 축에서 띄운다
+  (L.texts||[]).forEach(t=>{ctx.save();ctx.font=`800 ${t.size||fs+3}px ${CF}`;
+    let py=Y(t.y)+5; if(t.sign>0) py=Math.min(py,ay-14); else if(t.sign<0) py=Math.max(py,ay+fs+40);
+    const tw=ctx.measureText(t.s).width, bx=t.sign?13:0, x0=X(t.x)-(tw+bx*2)/2+bx*2;
+    if(t.sign) signBadge(ctx,x0-bx-1,py-5,t.sign,t.sign>0?C.posLine:C.negLine);
+    haloText(ctx,t.s,x0,py,t.color,'left');ctx.restore();});
+  // 방향 화살표 (a → b): [2단계] 넓이 글자와 겹치지 않게 그래프 맨 위에 '치수선'처럼
+  if(L.arrow){const {from,to,color}=L.arrow; if(Math.abs(to-from)>1e-9){const yy=16, x0=X(from), x1=X(to), d=Math.sign(x1-x0);
+    ctx.save();ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=3;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x0,yy);ctx.lineTo(x1-d*9,yy);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x1,yy);ctx.lineTo(x1-d*12,yy-7);ctx.lineTo(x1-d*12,yy+7);ctx.closePath();ctx.fill();ctx.restore();}}
+  // a, b 손잡이 (움직이는 점 = 흰 채움 + --pz-point 테두리), 이름표는 눈금 숫자 자리 아래에 "a = −2"
+  (L.handles||[]).forEach(hd=>{const cx=X(hd.x);ctx.save();ctx.beginPath();ctx.arc(cx,ay,9,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.lineWidth=3.5;ctx.strokeStyle=C.point;ctx.stroke();
+    ctx.font=`800 ${fs+2}px ${CF}`;
+    const ty=hd.up?ay-16:ay+fs+19; haloText(ctx,hd.label+' = '+fmt(hd.x,hd.x%1?1:0),cx,ty,C.pointInk,'center');ctx.restore();});
+}
+function toData(cv,e){const r=cv.getBoundingClientRect(),V=cv._V;return{x:V.xMin+(e.clientX-r.left)/r.width*(V.xMax-V.xMin)};}
+function attachHandleDrag(cv,S,onChange){
+  let which=null;
+  cv.addEventListener('pointerdown',e=>{if(!cv._V)return;const x=toData(cv,e).x;which=Math.abs(x-S.a)<Math.abs(x-S.b)?'a':'b';try{cv.setPointerCapture(e.pointerId);}catch(_){}move(e);});
+  const move=e=>{if(!which)return;const x=Math.round(toData(cv,e).x*2)/2;S[which]=Math.max(-5,Math.min(5,x));onChange();};
+  cv.addEventListener('pointermove',move);
+  ['pointerup','pointercancel','lostpointercapture'].forEach(t=>cv.addEventListener(t,()=>which=null));
+}
+function bindPair(sId,nId,get,set,min,max,step){
+  const s=document.getElementById(sId),n=document.getElementById(nId);
+  s.min=min;s.max=max;s.step=step;n.step=step;
+  const sync=()=>{const v=get();s.value=v;n.value=+(+v).toFixed(2);};
+  s.addEventListener('input',()=>{set(+s.value);n.value=+(+s.value).toFixed(2);});
+  n.addEventListener('input',()=>{let v=+n.value;if(n.value===''||isNaN(v))return;v=Math.max(min,Math.min(max,v));v=+(Math.round(v/step)*step).toFixed(6)||0;/* [1단계 수정] 직접 입력값도 슬라이더 눈금(step)에 맞춤 */set(v);s.value=v;});
+  n.addEventListener('change',sync);
+  return {sync};
+}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),Math.max(2200,msg.length*75));} // [2단계] 긴 안내는 더 오래
+const V0={xMin:-6,xMax:6,xStep:1,yMin:-6,yMax:6,yStep:1};
+const sub=s=>({1:'₁',2:'₂'})[s];
+
+/* 공통: 직선 + 구간 그림 그리기 */
+function layersFor(m,n,a,b,opts={}){
+  const {R}=summary(m,n,a,b), f=x=>m*x+n, C=pal();   // [2단계] 색은 테마 토큰
+  const fills=R.filter(r=>r.sign!==0).map(r=>({color:r.sign>0?C.posFill:C.negFill,pts:[[r.u,0],[r.u,f(r.u)],[r.v,f(r.v)],[r.v,0]]}));
+  const texts=[];
+  if(opts.areaText!==false) R.filter(r=>r.sign!==0&&r.area>=0.5).forEach(r=>{const cx=(r.u+r.v)/2;texts.push({s:(r.sign>0?'S₁=':'S₂=')+fmtExactTxt(r.area),sign:r.sign,x:Math.abs(cx)<0.6?cx+(cx>=0?0.7:-0.7):cx,y:f(cx)/2.4,color:r.sign>0?C.posInk:C.negInk});});
+  return {fills,texts,vlines:[{x:a},{x:b}],lines:[{m,n,color:C.f,labelColor:C.fInk,label:opts.label}],
+    handles:[{x:a,label:'a',up:false},{x:b,label:'b',up:Math.abs(a-b)<0.75}],
+    arrow:{from:a,to:b,color:a<=b?C.muted:C.ref}};
+}
+function totalHTML(m,n,a,b){
+  const s=summary(m,n,a,b), I=intHTML(fmt(a,a%1?1:0),fmt(b,b%1?1:0),'f(x)dx');
+  if(Math.abs(a-b)<1e-12) return `<span class="int">${I}</span> = <b class="mono">0</b> <span class="muted">(a = b)</span>`;
+  if(s.dir>0) return `<span class="int">${I}</span> = S<sub>1</sub> − S<sub>2</sub> = ${fmtExact(s.S1)} − ${fmtExact(s.S2)} = <b class="mono">${fmtExact(s.val)}</b>`;
+  return `<span class="int">${I}</span> = −(S<sub>1</sub> − S<sub>2</sub>) = −(${fmtExact(s.S1)} − ${fmtExact(s.S2)}) = <b class="mono">${fmtExact(s.val)}</b>`;
+}
+
+/* ---------- 탭 ---------- */
+let current='t1';
+function showTab(id){current=id;
+  document.querySelectorAll('.tabBtn').forEach(b=>{const on=b.dataset.tab===id;b.classList.toggle('active',on);b.setAttribute('aria-selected',String(on));});
+  document.querySelectorAll('.section').forEach(s=>s.classList.toggle('show',s.id===id));
+  if(window.PastelUI) PastelUI.fade(document.getElementById(id));   // [2단계] 새 패널을 부드럽게
+  window.scrollTo({top:0,behavior:'smooth'}); redrawCurrent(); requestAnimationFrame(redrawCurrent);}
+document.querySelectorAll('.tabBtn').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
+document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.go)));
+// [2단계] 탭을 처음 완료(✓)하는 순간 한 번만 축하. ④는 글자 두 개만 써도 ✓가 붙으므로 '제출용 복사' 때 축하한다.
+const CELEB={t1:['3-2-관찰','🎉 관찰 완료! 넓이는 같아도 정적분은 부호가 달라요'],t2:['3-2-조작','🎉 조작 완료! a와 b를 바꾸면 부호가 바뀌어요'],t3:['3-2-내예','🎉 미션 완료! 기울기가 다른 예까지 만들었어요']};
+function markDone(id){const b=document.querySelector(`.tabBtn[data-tab="${id}"]`);const first=!b.classList.contains('done');b.classList.add('done');
+  if(first&&CELEB[id]&&window.PastelUI) PastelUI.celebrate(CELEB[id][0],CELEB[id][1]);}
+function redrawCurrent(){({t1:render1,t2:render2,t3:render3,t4:()=>{}})[current]();}
+let rT;window.addEventListener('resize',()=>{clearTimeout(rT);rT=setTimeout(redrawCurrent,120);});
+
+/* ================= ① 관찰 ================= */
+const S1={k:0,solved:false};
+document.querySelectorAll('#obsChips .chip').forEach(c=>c.addEventListener('click',()=>{S1.k=+c.dataset.k;
+  document.querySelectorAll('#obsChips .chip').forEach(d=>d.classList.toggle('on',d===c));render1();}));
+function render1(){
+  const C=pal(), L={fills:[],texts:[],lines:[],vlines:[{x:2}]};
+  const add=(m,lab)=>{const l=layersFor(m,0,0,2,{label:lab});L.fills.push(...l.fills);L.lines.push({m,n:0,color:m>0?C.f:C.g,labelColor:m>0?C.fInk:C.gInk,label:lab});
+    L.texts.push({s:m>0?'S₁':'S₂',sign:m>0?1:-1,x:1.35,y:m>0?0.6:-0.6,color:m>0?C.posInk:C.negInk,size:16});};
+  if(S1.k===0||S1.k===2) add(1,'y = x');
+  if(S1.k===1||S1.k===2) add(-1,'y = −x');
+  L.texts.push({s:'x = 2',x:2.85,y:-5.3,color:C.muted});
+  drawPlane(document.getElementById('cv1'),V0,L);
+  document.getElementById('cap1').textContent='한 칸: 가로 1, 세로 1';
+}
+document.getElementById('check1').addEventListener('click',()=>{
+  const a=+document.getElementById('s1in').value,b=+document.getElementById('s2in').value,fb=document.getElementById('fb1');
+  const okA=document.getElementById('s1in').value!==''&&Math.abs(a-2)<1e-9, okB=document.getElementById('s2in').value!==''&&Math.abs(b-2)<1e-9;
+  fb.className='feedback show '+(okA&&okB?'good':'warn');
+  if(okA&&okB){fb.innerHTML='정답! 두 도형은 모두 밑변의 길이가 2, 높이가 2인 직각삼각형이라 넓이가 2로 같아요.';document.getElementById('reveal1').classList.add('show');S1.solved=true;markDone('t1');}
+  else if(a<0||b<0) fb.innerHTML='넓이는 음수가 될 수 없어요. S<sub>1</sub>, S<sub>2</sub>는 모두 도형의 넓이예요.'; // [1단계 수정] S₁ 음수도 안내
+  else fb.innerHTML='각 도형은 직각삼각형이에요. 밑변과 높이를 그래프에서 읽어 (밑변) × (높이) ÷ 2를 계산해 보세요.';
+});
+document.getElementById('d1').innerHTML=intHTML('a','b','f(x)dx');
+document.getElementById('d1b').innerHTML=intHTML('0','2','x dx');
+document.getElementById('d2b').innerHTML=intHTML('0','2','(−x)dx');
+
+/* ================= ② 조작 ================= */
+const PRE2=[
+  {lab:'예시 1',m:-1,n:2,a:-2,b:4,ans:'6'},
+  {lab:'예시 2',m:-1,n:2,a:4,b:-2,ans:'−6'},
+  {lab:'예시 3',m:1,n:4,a:-2,b:2,ans:'16'},
+  {lab:'예시 4',m:.5,n:1,a:2,b:-4,ans:'−3'},
+];
+const S2={m:-1,n:2,a:-2,b:4,seen:{swap:false}};
+const pres=document.getElementById('presets2');
+PRE2.forEach((p,i)=>{const b=document.createElement('button');b.className='chip'+(i===0?' on':'');b.innerHTML=`${p.lab}`;
+  b.onclick=()=>{Object.assign(S2,{m:p.m,n:p.n,a:p.a,b:p.b});pres.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));sync2();render2();};pres.appendChild(b);});
+const m2=bindPair('m2s','m2n',()=>S2.m,v=>{S2.m=v;offChips();render2();},-3,3,0.5);
+const n2=bindPair('n2s','n2n',()=>S2.n,v=>{S2.n=v;offChips();render2();},-5,5,0.5);
+const a2=bindPair('a2s','a2n',()=>S2.a,v=>{S2.a=v;offChips();render2();},-5,5,0.5);
+const b2=bindPair('b2s','b2n',()=>S2.b,v=>{S2.b=v;offChips();render2();},-5,5,0.5);
+function sync2(){m2.sync();n2.sync();a2.sync();b2.sync();}
+function offChips(){const p=PRE2.find(p=>p.m===S2.m&&p.n===S2.n&&p.a===S2.a&&p.b===S2.b);pres.querySelectorAll('.chip').forEach((c,i)=>c.classList.toggle('on',PRE2[i]===p));}
+attachHandleDrag(document.getElementById('cv2'),S2,()=>{sync2();offChips();render2();});
+document.getElementById('swap2').onclick=()=>{[S2.a,S2.b]=[S2.b,S2.a];S2.seen.swap=true;sync2();offChips();render2();};
+function render2(){
+  const {m,n,a,b}=S2,s=summary(m,n,a,b);
+  document.getElementById('f2txt').innerHTML=lineStr(m,n);
+  drawPlane(document.getElementById('cv2'),V0,layersFor(m,n,a,b,{label:'y = f(x)'})); // [2단계] 선 이름표
+  document.getElementById('cap2').textContent='한 칸: 가로 1, 세로 1';
+  document.getElementById('r2s1').innerHTML=fmtExact(s.S1);
+  document.getElementById('r2s2').innerHTML=fmtExact(s.S2);
+  document.getElementById('r2tot').innerHTML=totalHTML(m,n,a,b);
+  let note='';
+  if(Math.abs(a-b)<1e-12) note='a = b이면 둘러싸인 도형이 없으므로 정적분의 값은 0으로 정의해요.';
+  else if(a>b) note='지금은 a &gt; b예요. 정의에 따라 b부터 a까지의 정적분에 −를 붙인 값이에요. (그래프 위 화살표가 a에서 b로 거꾸로 가요.)';
+  else note='a &lt; b일 때: x축 위쪽 넓이 S<sub>1</sub>은 양의 넓이로 더하고, x축 아래쪽 넓이 S<sub>2</sub>는 음의 넓이로 세어 빼요.';
+  const chip=PRE2.find(p=>p.m===m&&p.n===n&&p.a===a&&p.b===b);
+  if(chip) note+=` <b>${chip.lab}의 답: ${chip.ans}</b>`;
+  document.getElementById('r2note').innerHTML=note;
+  if(S2.seen.swap) markDone('t2');
+}
+
+/* ================= ③ 내가 만든 예 ================= */
+const S3={m:1,n:1,a:0,b:3,list:[]};
+const m3=bindPair('m3s','m3n',()=>S3.m,v=>{S3.m=v;render3();},-3,3,0.5);
+const n3=bindPair('n3s','n3n',()=>S3.n,v=>{S3.n=v;render3();},-5,5,0.5);
+const a3=bindPair('a3s','a3n',()=>S3.a,v=>{S3.a=v;render3();},-5,5,0.5);
+const b3=bindPair('b3s','b3n',()=>S3.b,v=>{S3.b=v;render3();},-5,5,0.5);
+function sync3(){m3.sync();n3.sync();a3.sync();b3.sync();}
+attachHandleDrag(document.getElementById('cv3'),S3,()=>{sync3();render3();});
+document.getElementById('swap3').onclick=()=>{[S3.a,S3.b]=[S3.b,S3.a];sync3();render3();
+  // [1단계 수정] 현재 정적분이 0일 때만 '같아요', 아니면 부호가 바뀜을 안내
+  const v=summary(S3.m,S3.n,S3.a,S3.b).val;
+  toast(Math.abs(v)<1e-9?'a와 b를 바꿔도 정적분은 0으로 같아요!':'지금은 정적분이 0이 아니라서 a와 b를 바꾸면 부호가 바뀌어요 ('+fmtExactTxt(-v)+' → '+fmtExactTxt(v)+')');};
+document.getElementById('q117a').innerHTML=intHTML('a','b','f(x)dx');
+document.getElementById('q117b').innerHTML=intHTML('b','a','f(x)dx');
+function render3(){
+  const {m,n,a,b}=S3,s=summary(m,n,a,b);
+  document.getElementById('f3txt').innerHTML=lineStr(m,n);
+  drawPlane(document.getElementById('cv3'),V0,layersFor(m,n,a,b,{label:'y = f(x)'})); // [2단계] 선 이름표
+  document.getElementById('cap3').textContent='한 칸: 가로 1, 세로 1';
+  document.getElementById('r3s1').innerHTML=fmtExact(s.S1);
+  document.getElementById('r3s2').innerHTML=fmtExact(s.S2);
+  document.getElementById('r3tot').innerHTML=totalHTML(m,n,a,b)+`<br><span class="muted">도형의 넓이 S<sub>1</sub> + S<sub>2</sub> = ${fmtExact(s.S1+s.S2)}</span>`;
+  const fb=document.getElementById('fb3'),zero=Math.abs(s.val)<1e-9,area=s.S1+s.S2>1e-9;
+  if(zero&&area){
+    fb.className='feedback show good';
+    const key=[m,n,Math.min(a,b),Math.max(a,b)].join(',');
+    const saved=S3.list.some(e=>e.key===key);
+    fb.innerHTML='성공! 정적분의 값은 0인데 도형의 넓이는 '+fmtExact(s.S1+s.S2)+ieyo(s.S1+s.S2)+'. '+
+      (saved?'이미 저장한 예예요.':(S3.list.length>=3&&(new Set(S3.list.map(e=>e.m)).size>=2||S3.list.some(e=>e.m===m))?/* [1단계 수정] 3개가 모두 같은 기울기면 다른 기울기 예 1개는 더 저장 허용 */'예는 3개까지 저장돼요.':'<button class="btn small pz-btn pz-btn-primary" id="save3" style="margin-left:4px">이 예 저장하기</button>'));
+    const sv=document.getElementById('save3');
+    if(sv) sv.onclick=()=>{S3.list.push({key,m,n,a,b,S:s.S1});renderList();
+      document.getElementById('reveal3').classList.add('show');
+      const slopes=new Set(S3.list.map(e=>e.m));
+      if(slopes.size>=2){markDone('t3');toast('기울기가 다른 예까지 완성!');} else toast('저장! 이번에는 기울기가 다른 예를 만들어 보세요.');
+      render3();};
+  }else if(zero){fb.className='feedback show warn';fb.innerHTML='정적분은 0이지만 도형의 넓이도 0이에요. 넓이가 0이 아니어야 해요.';}
+  else{fb.className='feedback show warn';fb.innerHTML=`지금 정적분의 값은 <b class="mono">${fmtExact(s.val)}</b>${ieyo(s.val)}. 0이 되도록 조절해 보세요.`;}
+}
+function renderList(){
+  document.getElementById('myList').innerHTML=S3.list.map((e,i)=>`<div class="myItem"><b>예 ${i+1}</b> · <span class="math">${lineStr(e.m,e.n)}</span>, a = ${fmt(e.a,e.a%1?1:0)}, b = ${fmt(e.b,e.b%1?1:0)}<br><span class="pos">S₁ = ${fmtExact(e.S)}</span>, <span class="neg">S₂ = ${fmtExact(e.S)}</span> → 정적분 0, 넓이 ${fmtExact(2*e.S)}</div>`).join('');
+}
+
+/* ================= ④ 열린 질문 ================= */
+const ans4=document.getElementById('ans4');
+ans4.addEventListener('input',()=>{
+  const t=ans4.value.trim(); const n=t?t.split(/[.!?。]+|\n+/).filter(s=>s.trim().length>1).length:0;
+  const c=document.getElementById('cnt4');
+  c.textContent=`${n}문장 · ${t.length}자`+(n>2?' — 1~2문장으로 줄여 볼까요?':(n>=1?' — 좋아요!':''));
+  c.style.color=n>2?'var(--warn)':''; if(n>=1) markDone('t4');
+});
+document.getElementById('copy4').onclick=()=>{
+  const name=document.getElementById('name4').value.trim()||'(이름 없음)';
+  const my=S3.list.length?S3.list.map((e,i)=>`  예${i+1}) ${lineStr(e.m,e.n,true)}, a=${fmt(e.a,e.a%1?1:0)}, b=${fmt(e.b,e.b%1?1:0)} → 정적분 0, 넓이 ${fmtExactTxt(2*e.S)}`).join('\n'):'  (아직 만들지 않음)';
+  const txt=`[정적분 · 부호 있는 넓이] ${name}\n① 관찰: ${S1.solved?'완료':'미완료'}\n③ 내가 만든 예 (정적분 0, 넓이 ≠ 0):\n${my}\n④ 열린 질문 답: ${ans4.value.trim()||'(미작성)'}`;
+  const fallback=()=>{const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();
+    let ok=false;try{ok=document.execCommand('copy');}catch(_){}document.body.removeChild(ta);toast(ok?'복사했어요! 붙여 넣으세요.':'복사가 막혔어요. 길게 눌러 직접 복사해 주세요.');};
+  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(txt).then(()=>toast('복사했어요! 붙여 넣으세요.'),fallback);}else fallback();
+};
+
+/* ---------- [2단계] 화면 보조 ---------- */
+// ① 정답 뒤 열리는 정의 카드가 화면 아래에 있으면 부드럽게 보여 준다
+document.getElementById('check1').addEventListener('click',()=>{if(S1.solved) setTimeout(()=>document.getElementById('reveal1').scrollIntoView({behavior:'smooth',block:'nearest'}),80);});
+// ④ 제출용 복사를 처음 누르면 축하 (✓ 조건은 그대로)
+document.getElementById('copy4').addEventListener('click',()=>{if(window.PastelUI&&ans4.value.trim()) PastelUI.celebrate('3-2-질문','🎉 질문 탭 완료! 복사한 답을 제출하세요');});
+
+/* ---------- 시작 ---------- */
+sync2();sync3();render1();
+/* [UX] 처음 값으로: 그 탭의 슬라이더 값만 처음 값으로 되돌린다 (저장한 예·확인 표시는 그대로) */
+const INIT={s2:{m:S2.m,n:S2.n,a:S2.a,b:S2.b}, s3:{m:S3.m,n:S3.n,a:S3.a,b:S3.b}};
+const RESET={
+  t2(){Object.assign(S2,INIT.s2);sync2();offChips();render2();},
+  t3(){Object.assign(S3,INIT.s3);sync3();render3();}
+};
+document.querySelectorAll('[data-reset]').forEach(b=>b.addEventListener('click',()=>RESET[b.dataset.reset]()));
+</script>
+</body>
+</html>

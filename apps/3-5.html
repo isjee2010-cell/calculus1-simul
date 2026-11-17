@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>로봇 경주</title>
+<style>
+/* [2단계 디자인] 공통 테마(복숭아 하늘) 적용. 글꼴·바탕은 테마(PZ 블록)가 정한다. 하드코딩 색 대신 --pz-* 토큰. */
+:root{
+  --bg:var(--pz-bg); --panel:var(--pz-panel); --panelSoft:var(--pz-soft); --border:var(--pz-line); --borderSoft:var(--pz-line);
+  --textPrimary:var(--pz-ink); --textMuted:var(--pz-muted); --textFaint:var(--pz-muted);
+  --accent:var(--pz-accent-btn); --accentSoft:var(--pz-accent-soft); --accentLine:var(--pz-line2);
+  /* 앞으로(+) = 하늘(양의 넓이와 같은 색), 뒤로(−) = 산호(음의 넓이와 같은 색), 로봇 A = 복숭아, 로봇 B = 하늘 */
+  --fwd:var(--pz-sky-line); --fwdSoft:var(--pz-sky-soft); --back:var(--pz-coral-line); --backSoft:var(--pz-rose-soft);
+  --dist:var(--pz-butter-line); --distSoft:var(--pz-butter-soft); --mint:var(--pz-ok-soft); --mintLine:var(--pz-ok);
+  --robA:var(--pz-accent-btn); --robB:var(--pz-sky-line);
+}
+*{box-sizing:border-box}
+body{margin:0;-webkit-text-size-adjust:100%;line-height:1.55}
+.mono{font-family:var(--pz-mono)}
+
+/* 한 줄 소개 + 탭 (제목은 상단 바가 보여 줌) */
+.top{margin-bottom:12px}
+.desc{margin:0;font-size:15px;color:var(--pz-muted);line-height:1.55}
+.desc .act{font-family:var(--pz-font-title);font-weight:400;font-size:18px;color:var(--pz-accent-ink)}
+.tabs{margin-bottom:16px}
+.tabBtn{white-space:nowrap}
+@media (max-width:560px){.tabBtn .long{display:none}}
+.view{display:none}.view.active{display:block}
+.hidden{display:none!important}
+
+/* 카드 */
+.card{background:var(--pz-panel);border:2px solid var(--pz-line);border-radius:var(--pz-r-lg);padding:18px 20px;margin-bottom:16px;box-shadow:var(--pz-shadow)}
+.cardSoft{background:var(--pz-bg2);border:2px solid var(--pz-line);border-radius:var(--pz-r-lg);padding:14px 20px;margin-bottom:16px}
+.cardTitle{font-family:var(--pz-font-title);font-weight:400;font-size:19px;color:var(--pz-ink);margin-bottom:10px;line-height:1.3}
+.cnt{display:inline-block;font:700 14px/1.1 var(--pz-font);color:var(--pz-accent-ink);background:var(--pz-accent-soft);border-radius:var(--pz-r-pill);padding:5px 11px;margin-left:6px;vertical-align:2px}
+.intro p{margin:8px 0 0;font-size:15.5px;color:var(--pz-ink);line-height:1.65}
+.ref{display:inline-block;font-size:14px;font-weight:700;color:var(--pz-accent-ink);background:var(--pz-accent-soft);border-radius:var(--pz-r-pill);padding:5px 12px}
+.stepTag{display:inline-block;font-size:14px;font-weight:700;color:#fff;background:var(--pz-accent-btn);border-radius:var(--pz-r-pill);padding:3px 10px;margin-right:6px}
+
+/* 스플릿 뷰: 1100px 이상 = 왼쪽 조작 + 오른쪽 그래프(화면에 다 들어가면 sticky), 1099px 이하 = 그래프 → 조작 한 줄 */
+.layout{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+.layout>*{min-width:0} /* [1단계 수정] 화면 회전·창 크기 변경 후 캔버스가 이전 너비로 열을 붙잡아 가로 스크롤이 생기던 문제 */
+/* 1099px 이하: 왼쪽 열을 풀어(display:contents) [소개·칩 → 그래프 → 조작 카드] 순서로 한 줄 */
+@media (max-width:1099px){
+  .layout .ctrl{display:contents}
+  .layout .ctrl>*{min-width:0;margin-bottom:0}
+  .layout .ctrl>.intro,.layout .ctrl>.chips{order:-2}
+  .layout .graphCol{order:-1}
+  .layout .graphCol>.card:last-child{margin-bottom:0}
+}
+.layout .ctrl>.chips{margin-bottom:16px}
+.layout .graphCol>*:last-child{margin-bottom:0}
+@media (min-width:1100px){
+  .layout{grid-template-columns:minmax(340px,1fr) minmax(0,1.35fr);column-gap:20px;align-items:start}
+  .layout .graphCol{order:0}
+  .layout .graphCol.stick{position:sticky;top:calc(var(--pz-topbar-h) + 12px)}
+}
+.cv{width:100%;position:relative}
+/* 맨 canvas 선택자 금지(축하 캔버스 보호) → .cv 안으로 한정 */
+.cv canvas{display:block;touch-action:pan-y;margin:0 auto}
+.gHead{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;margin-bottom:10px;flex-wrap:wrap}
+.unit{font-size:13px;color:var(--pz-muted)}
+.gFoot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+.legend{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:14px;color:var(--pz-ink2);align-items:center}
+.legend i{display:inline-block;width:16px;height:12px;border-radius:4px;margin-right:5px;vertical-align:-1px}
+.legend i.ln{height:4px;border-radius:var(--pz-r-pill);vertical-align:3px;width:20px}
+.legend i.dash{height:3px;border-radius:0;vertical-align:3px;width:20px;background:repeating-linear-gradient(90deg,var(--pz-faint) 0 6px,transparent 6px 10px)!important}
+.legend i.fill-pos{background:var(--pz-pos-fill);box-shadow:0 0 0 1.5px var(--pz-sky) inset}
+.legend i.fill-neg{background:var(--pz-neg-fill);box-shadow:0 0 0 1.5px var(--pz-coral-line) inset}
+.legend .sg{font-weight:800;margin-right:2px}
+.legend .sg.p{color:var(--pz-sky-ink)} .legend .sg.n{color:var(--pz-rose-ink)}
+
+/* 슬라이더: 앱 꾸밈 CSS를 지워 테마 모양(굵은 트랙·흰 손잡이+복숭아 테두리) */
+.sRow{margin:12px 0 6px}
+.sHead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
+.sLab{font-size:15.5px;font-weight:600;color:var(--pz-ink2)}
+.miniInput{width:92px;text-align:right}   /* 테두리·여백·글꼴·포커스는 theme.css */
+.sRow input[type=range]{width:100%;margin:8px 0 6px}
+
+/* 버튼 모양은 theme.css의 .pz-btn(-primary/-soft/-ghost). 여기는 터치 크기·간격만 */
+.btn{min-height:44px}
+.btn.pz-btn-primary{margin-bottom:5px}
+.btn.small{padding:7px 14px;min-height:38px;font-size:15px}
+.btnRow{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:8px 15px;border-radius:var(--pz-r-pill);border:2px solid var(--pz-line);background:var(--pz-panel);color:var(--pz-ink2);font:600 15px/1.2 var(--pz-font);cursor:pointer;min-height:40px}
+.chip:hover{border-color:var(--pz-accent)}
+.chip.on{background:var(--pz-accent-soft);border-color:var(--pz-accent);color:var(--pz-accent-ink)}
+.seg{display:inline-flex;background:var(--pz-soft);border-radius:var(--pz-r-pill);padding:4px;gap:4px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;padding:8px 14px;border-radius:var(--pz-r-pill);font:700 15px/1.2 var(--pz-font);color:var(--pz-muted);cursor:pointer;white-space:nowrap}
+.seg button:hover{color:var(--pz-accent-ink)}
+.seg button.on{background:var(--pz-panel);color:var(--pz-accent-ink);box-shadow:0 0 0 2px var(--pz-accent) inset,var(--pz-shadow-sm)}
+.seg.big{display:flex;margin-bottom:16px;max-width:640px}
+.seg.big button{flex:1 1 0;font-size:16px;padding:11px 8px}
+
+/* 읽기 값 */
+.eqBox{background:var(--pz-soft);border-radius:var(--pz-r-md);padding:12px 16px;margin:8px 0;font-size:15.5px;line-height:1.65;color:var(--pz-ink);overflow-x:auto}
+.eqBox b.mono{font-size:17px}
+.eqLine{display:flex;align-items:center;gap:10px;font-size:16px;padding:8px 12px;border-radius:var(--pz-r-input);background:var(--pz-soft);margin-bottom:6px;overflow-x:auto;white-space:nowrap;color:var(--pz-ink)}
+.eqLine i{flex:0 0 auto;width:20px;height:4px;border-radius:var(--pz-r-pill)}
+.eqLine.f i{background:var(--pz-f)} .eqLine.g i{background:var(--pz-g)}
+.eqLine b{flex:0 0 auto;font-size:16px;font-family:var(--pz-mono)}
+.eqLine.f b{color:var(--pz-sky-ink)} .eqLine.g b{color:var(--pz-lav-ink)}
+.kv{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:15px;color:var(--pz-muted);margin:8px 0}
+.kv b{color:var(--pz-ink);font-size:16px;text-align:right}
+.bigArea{display:flex;justify-content:space-between;align-items:center;gap:6px 10px;background:var(--pz-accent-soft);border-radius:var(--pz-r-md);padding:12px 16px;margin:12px 0;flex-wrap:wrap}
+.bigArea span{font-size:15px;font-weight:700;color:var(--pz-accent-ink)}
+.bigArea b{font-family:var(--pz-mono);font-size:24px;color:var(--pz-accent-ink)}
+.bigArea small,.bVal small{font-size:13px;color:var(--pz-muted);font-weight:500}
+.hint{font-size:14px;color:var(--pz-muted);margin:8px 0 0;line-height:1.55}
+/* 상태 안내 = .pz-feedback 모양 (정보 = 하늘, 좋음 = 민트 + ✓) */
+.status{font-size:15px;font-weight:600;margin:12px 0 0;padding:12px 14px;border-radius:var(--pz-r-md);background:var(--pz-info-soft);color:var(--pz-info-ink);line-height:1.55}
+.status:empty{display:none}
+.status.good{background:var(--pz-ok-soft);color:var(--pz-ok-ink)}
+.status.good::before{content:"✓ ";font-weight:800}
+.status .hint{color:inherit;opacity:.85;font-size:14px}
+.cardSoft.found{background:var(--pz-ok-soft);border-color:var(--pz-ok);font-size:15.5px;line-height:1.65}
+.found b{color:var(--pz-ok-ink)}
+.found .hint{color:var(--pz-ok-ink)}
+.cardSoft.think{font-size:15px;line-height:1.65;background:var(--pz-butter-soft);border-color:transparent;color:var(--pz-ink)}
+.think > b:first-child{font-family:var(--pz-font-title);font-weight:400;font-size:17px;color:var(--pz-butter-ink)}
+details summary{cursor:pointer;font-family:var(--pz-font-title);font-weight:400;font-size:18px;color:var(--pz-ink);list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:'▸ ';color:var(--pz-accent-btn)}
+details[open] summary::before{content:'▾ '}
+
+/* 표 */
+.tbl{width:100%;border-collapse:collapse;font-size:15px}
+.tbl th{font-weight:700;color:var(--pz-muted);text-align:left;padding:8px 6px;border-bottom:2px solid var(--pz-line);font-size:14px}
+.tbl td{padding:8px 6px;border-bottom:2px dashed var(--pz-line);vertical-align:top;color:var(--pz-ink)}
+.tbl td.mono{font-size:14px}
+.tbl .del{border:0;background:none;color:var(--pz-muted);cursor:pointer;font-size:18px;padding:0 6px;border-radius:var(--pz-r-sm)}
+.tbl .del:hover{color:var(--pz-bad-ink)}
+
+
+/* 계기판: 위치의 변화량(라벤더, 부호 있음) vs 움직인 거리(버터, 항상 0 이상), 앞으로 → / 뒤로 ← */
+.meters{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.meter{border-radius:var(--pz-r-md);padding:11px 14px;border:2px solid;min-width:0}
+.meter span{display:block;font-size:14.5px;font-weight:700}
+.meter span::after{display:block;font-size:13px;font-weight:600;opacity:.85;margin-top:1px}
+.meter b{display:block;font-family:var(--pz-mono);font-size:23px;margin-top:3px;white-space:nowrap;overflow-x:auto}
+.meter small{font-size:13px;color:var(--pz-muted);font-weight:500}
+.meter.d{background:var(--pz-lav-soft);border-color:var(--pz-lav)} .meter.d span,.meter.d b{color:var(--pz-lav-ink)}
+.meter.d span::after{content:"= 앞 − 뒤 (부호 있음 ±)"}
+.meter.o{background:var(--pz-butter-soft);border-color:var(--pz-butter)} .meter.o span,.meter.o b{color:var(--pz-butter-ink)}
+.meter.o span::after{content:"= 앞 + 뒤 (항상 0 이상)"}
+.meter.f{background:var(--pz-sky-soft);border-color:var(--pz-sky)} .meter.f span,.meter.f b{color:var(--pz-sky-ink)} .meter.f b{font-size:20px}
+.meter.f span::before{content:"→ "}
+.meter.b{background:var(--pz-rose-soft);border-color:var(--pz-line2)} .meter.b span,.meter.b b{color:var(--pz-rose-ink)} .meter.b b{font-size:20px}
+.meter.b span::before{content:"← "}
+@media (max-width:420px){.meters{grid-template-columns:1fr}}
+.dir{font-weight:800}
+.dir.f{color:var(--pz-sky-ink)} .dir.b{color:var(--pz-rose-ink)}
+.status.warn{background:var(--pz-warn-soft);color:var(--pz-warn-ink)}
+.status.warn::before{content:"! ";font-weight:800}
+.formula{font-size:15px;margin:12px 0 0;padding:12px 14px;border-radius:var(--pz-r-md);background:var(--pz-soft);line-height:1.8;color:var(--pz-ink)}
+.formula .p{color:var(--pz-sky-ink);font-weight:700} .formula .n{color:var(--pz-rose-ink);font-weight:700}
+.chip.race{border-color:var(--pz-butter);color:var(--pz-butter-ink)}
+.chip.race.on{background:var(--pz-butter-soft);border-color:var(--pz-butter-line);color:var(--pz-butter-ink)}
+.dataTbl{width:100%;border-collapse:separate;border-spacing:0;font-size:15px;text-align:center;margin-top:6px;border:2px solid var(--pz-line);border-radius:var(--pz-r-md);overflow:hidden}
+.dataTbl th,.dataTbl td{border-right:2px solid var(--pz-line);border-bottom:2px solid var(--pz-line);padding:7px 3px;font-family:var(--pz-mono);color:var(--pz-ink)}
+.dataTbl tr>*:last-child{border-right:0} .dataTbl tr:last-child>*{border-bottom:0}
+.dataTbl th{background:var(--pz-soft);font-family:inherit;font-weight:700;color:var(--pz-ink2)}
+b.rA{color:var(--pz-accent-ink)} b.rB{color:var(--pz-sky-ink)}
+.dataTbl th.rA{color:var(--pz-accent-ink)} .dataTbl th.rB{color:var(--pz-sky-ink)}
+.reveal{border:2px dashed var(--pz-line2);border-radius:var(--pz-r-md);padding:12px 14px;margin-top:10px;font-size:15px}
+.reveal .q{font-weight:700;color:var(--pz-ink)}
+.reveal .ans{margin:6px 0 2px;font-family:var(--pz-mono);font-size:15px;color:var(--pz-ok-ink);background:var(--pz-ok-soft);border-radius:var(--pz-r-sm);padding:8px 10px}
+.reveal .btn{margin-top:8px}
+.check{display:flex;align-items:center;gap:10px;font-size:15px;margin-top:12px;cursor:pointer;color:var(--pz-ink2)}
+.check input{width:22px;height:22px;accent-color:var(--pz-accent-btn)}
+textarea.memo{resize:vertical;min-height:56px}
+.savedItem{border:2px solid var(--pz-line);border-radius:var(--pz-r-md);padding:12px 14px;margin-top:10px;font-size:15px;background:var(--pz-panel);display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:start}
+.savedItem svg{width:120px;height:56px;background:var(--pz-soft);border-radius:var(--pz-r-sm)}
+.savedItem .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.qBox{max-width:860px;margin:0 auto}
+.ansCard{border:2px solid var(--pz-line);border-radius:var(--pz-r-md);padding:12px 40px 12px 14px;margin-top:10px;background:var(--pz-panel);position:relative;font-size:15px}
+.ansCard .tag{display:inline-block;font-size:13.5px;font-weight:700;border-radius:var(--pz-r-pill);padding:3px 10px;margin-right:6px;background:var(--pz-accent-soft);color:var(--pz-accent-ink)}
+.ansCard .x{position:absolute;right:10px;top:8px;border:0;background:none;color:var(--pz-muted);cursor:pointer;font-size:18px;border-radius:var(--pz-r-sm)}
+.count{font-size:13px;color:var(--pz-muted);text-align:right;margin-top:4px}
+.memo{font-family:inherit;font-size:15px;padding:10px 12px;border:2px solid var(--pz-line);border-radius:var(--pz-r-input);color:var(--pz-ink);background:var(--pz-panel);width:100%}
+.memo:focus{outline:none;border-color:var(--pz-accent);box-shadow:0 0 0 3px var(--pz-accent-soft)}
+.dragNote{font-size:14px;color:var(--pz-ink2);background:var(--pz-soft);border-radius:var(--pz-r-pill);padding:6px 12px}
+pre.rec{white-space:pre-wrap;font-family:var(--pz-mono);font-size:13.5px;line-height:1.6;color:var(--pz-ink);background:var(--pz-soft);border-radius:var(--pz-r-md);padding:14px;max-height:300px;overflow:auto;margin:12px 0 0}
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);background:var(--pz-panel);color:var(--pz-ink);border:2px solid var(--pz-line);padding:12px 20px;border-radius:var(--pz-r-pill);font:700 15px/1.3 var(--pz-font);box-shadow:var(--pz-shadow);opacity:0;transition:opacity .25s ease,transform .25s ease;pointer-events:none;z-index:1950;max-width:calc(100vw - 32px)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.footer{text-align:center;font-size:13px;color:var(--pz-muted);margin-top:28px}
+</style>
+<!-- PZ:HEAD -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../shared/theme.css">
+<script type="application/json" id="pz-meta">{"slug": "3-5", "unit": "3-5", "title": "속도와 거리", "group": null, "home": "../index.html", "guide": "../guides/3-5.html", "store": ["robot-race-sim-v1"]}</script>
+<script id="pz-ui" src="../shared/ui.js"></script>
+<!-- /PZ:HEAD -->
+</head>
+<body>
+<div class="wrap pz-wrap">
+  <!-- [2단계] 단원 배지·제목은 상단 바가 보여 주므로 h1·배지 삭제, 활동 이름과 소개는 한 줄로 -->
+  <header class="top">
+    <p class="desc"><span class="act">로봇 경주</span> · 어디에 있을까? 얼마나 달렸을까? <span class="pz-term" data-tip="위치의 변화량">위치의 변화량</span>과 <span class="pz-term" data-tip="움직인 거리">움직인 거리</span></p>
+  </header>
+
+  <nav class="tabs pz-tabs" role="tablist">
+    <button class="tabBtn pz-tab active" data-tab="t1" role="tab" aria-selected="true">1. 관찰</button>
+    <button class="tabBtn pz-tab" data-tab="t2" role="tab" aria-selected="false">2. 조작</button>
+    <button class="tabBtn pz-tab" data-tab="t3" role="tab" aria-selected="false">3. <span class="long">내가 만든 </span>예</button>
+    <button class="tabBtn pz-tab" data-tab="t4" role="tab" aria-selected="false">4. <span class="long">열린 </span>질문</button>
+  </nav>
+
+  <!-- ===================== 1. 관찰 ===================== -->
+  <section id="t1" class="view active">
+    <div class="layout">
+      <div class="ctrl"> <!-- [2단계] 소개·칩도 왼쪽 열 맨 위로 (기준 앱의 head 카드 자리) -->
+    <div class="cardSoft intro">
+      <span class="ref">개념 탐구</span>
+      <p>수직선 위를 움직이는 로봇에 계기판이 두 개 있어요. <b><span class="pz-term" data-tip="위치의 변화량">위치의 변화량</span></b>(출발한 곳에서 얼마나 옮겨 갔나)과 <b><span class="pz-term" data-tip="움직인 거리">움직인 거리</span></b>(바퀴가 실제로 달린 거리)예요. 재생하면서 두 계기판을 지켜보세요.</p>
+    </div>
+    <div class="chips" id="t1chips"></div>
+        <div class="card">
+          <div class="eqBox" id="t1desc"></div>
+          <div id="t1tHost"></div>
+          <div class="btnRow"><button class="btn primary pz-btn pz-btn-primary" id="t1play">▶ 재생</button><button class="btn pz-btn pz-btn-ghost" id="t1reset">↺ 처음으로</button></div>
+          <div class="kv"><span>속도 v(t)</span><b id="t1v"></b></div>
+          <div class="kv"><span>위치</span><b id="t1x"></b></div>
+          <div class="meters">
+            <div class="meter d"><span>위치의 변화량</span><b id="t1d"></b></div>
+            <div class="meter o"><span>움직인 거리</span><b id="t1o"></b></div>
+          </div>
+          <div class="btnRow"><button class="btn soft pz-btn pz-btn-soft" id="t1rec">기록하기</button></div>
+        </div>
+        <div class="card">
+          <div class="cardTitle">내 기록</div>
+          <table class="tbl"><thead><tr><th>장면</th><th>시각</th><th>위치</th><th>변화량</th><th>거리</th><th></th></tr></thead><tbody id="t1tbl"></tbody></table>
+          <p class="hint" id="t1hint"></p>
+        </div>
+        <div class="cardSoft found hidden" id="t1found">
+          <b>발견!</b> 로봇이 방향을 바꾸기 전에는 두 계기판의 값이 같아요. 뒤로 가기 시작하면 <b>위치의 변화량은 줄어들지만 움직인 거리는 계속 늘어나요.</b><br>
+          <span class="hint" style="display:block;margin-top:6px">속도 그래프의 파란 부분과 빨간 부분으로 두 값을 각각 어떻게 나타낼 수 있을까요? → 2. 조작에서 확인해요.</span>
+        </div>
+      </div>
+      <div class="graphCol">
+        <div class="card">
+          <div class="gHead"><span class="cardTitle" style="margin:0">수직선 위의 로봇</span><span class="unit" id="t1trU"></span></div>
+          <div class="cv"><canvas id="t1tr"></canvas></div>
+          <div class="gFoot"><div class="legend"><span><i class="ln" style="background:var(--fwd)"></i><b class="dir f">→</b> 앞으로 간 길</span><span><i class="ln" style="background:var(--back)"></i><b class="dir b">←</b> 뒤로 간 길</span></div></div>
+        </div>
+        <div class="card">
+          <div class="gHead"><span class="cardTitle" style="margin:0">속도 v(t)의 그래프</span><span class="unit" id="t1u"></span></div>
+          <div class="cv" data-w="1"><canvas id="t1c"></canvas></div>
+          <div class="gFoot"><div class="legend"><span><i class="fill-pos"></i><b class="sg p">+</b> v(t) &gt; 0 : 앞으로</span><span><i class="fill-neg"></i><b class="sg n">−</b> v(t) &lt; 0 : 뒤로</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 2. 조작 ===================== -->
+  <section id="t2" class="view">
+
+    <!-- 일반 모드 -->
+    <div class="layout" id="t2normal">
+      <div class="ctrl" id="t2normCtrl">
+    <div class="cardSoft intro" id="t2intro">
+      <span class="ref" id="t2ref">위치의 변화량과 움직인 거리</span>
+      <p id="t2introP">시각 a부터 b까지 구간을 바꿔 보세요. 속도 그래프의 <b class="dir f">파란 넓이</b>와 <b class="dir b">빨간 넓이</b>로 <span class="pz-term" data-tip="위치의 변화량">위치의 변화량</span>과 <span class="pz-term" data-tip="움직인 거리">움직인 거리</span>를 비교해요.</p>
+    </div>
+    <div class="chips" id="t2chips"></div>
+        <div class="card">
+          <div class="eqBox" id="t2desc"></div>
+          <div id="t2aHost"></div>
+          <div id="t2bHost"></div>
+          <div class="btnRow"><button class="btn primary pz-btn pz-btn-primary" id="t2run">▶ a부터 b까지 달리기</button></div>
+        </div>
+        <div class="card">
+          <div class="cardTitle">구간 <span class="mono" id="t2int"></span>에서</div>
+          <div class="meters">
+            <div class="meter f"><span>파란 넓이 (앞으로)</span><b id="t2P"></b></div>
+            <div class="meter b"><span>빨간 넓이 (뒤로)</span><b id="t2N"></b></div>
+            <div class="meter d"><span>위치의 변화량</span><b id="t2D"></b></div>
+            <div class="meter o"><span>움직인 거리</span><b id="t2O"></b></div>
+          </div>
+          <p class="formula" id="t2formula"></p>
+          <div class="btnRow"><button class="btn soft pz-btn pz-btn-soft" id="t2reveal">값 확인</button></div>
+        </div>
+        <details class="card" id="t2edit">
+          <summary>식 직접 바꾸기</summary>
+          <p class="hint">v(t) = at² + bt + c, 0 ≤ t ≤ 6</p>
+          <div id="t2editHost"></div>
+        </details>
+        <div class="cardSoft think"><b>생각해 보기</b> &nbsp;구간을 바꿔 가며 위치의 변화량과 움직인 거리가 <b>같아지는 때</b>와 <b>달라지는 때</b>를 찾아보세요. 언제 달라지나요?</div>
+      </div>
+      <div class="graphCol">
+        <div class="card">
+          <div class="gHead"><span class="cardTitle" style="margin:0">수직선 위의 로봇</span><span class="unit" id="t2trU"></span></div>
+          <div class="cv"><canvas id="t2tr"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="gHead"><span class="cardTitle" style="margin:0">속도 v(t)의 그래프</span><span class="unit" id="t2u"></span></div>
+          <div class="cv" data-w="1"><canvas id="t2c"></canvas></div>
+          <div class="gFoot"><div class="legend"><span><i class="fill-pos"></i><b class="sg p">+</b> v(t) &gt; 0 : 앞으로 →</span><span><i class="fill-neg"></i><b class="sg n">−</b> v(t) &lt; 0 : 뒤로 ←</span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 경주 모드 -->
+    <div class="layout hidden" id="t2race">
+      <div class="ctrl" id="t2raceCtrl">
+        <div class="card">
+          <div class="cardTitle">측정한 속도 (m/분)</div>
+          <table class="dataTbl">
+            <tr><th>t (분)</th><td>0</td><td>1</td><td>2</td><td>3</td><td>4</td></tr>
+            <tr><th class="rA">A</th><td>0</td><td>50</td><td>100</td><td>150</td><td>200</td></tr>
+            <tr><th class="rB">B</th><td>0</td><td>100/3</td><td>100</td><td>200</td><td>1000/3</td></tr>
+          </table>
+          <div id="t2rtHost"></div>
+          <div class="btnRow"><button class="btn primary pz-btn pz-btn-primary" id="t2rplay">▶ 경주 시작</button><button class="btn pz-btn pz-btn-ghost" id="t2rreset">↺ 출발선으로</button></div>
+          <label class="check"><input type="checkbox" id="t2rfill">0분부터 지금까지 두 그래프 사이 색칠하기</label>
+          <p class="status" id="t2rstat"></p>
+        </div>
+        <div class="card">
+          <div class="cardTitle">수행평가 문항 확인</div>
+          <p class="hint" style="margin-top:0">먼저 직접 구한 뒤 눌러 보세요.</p>
+          <div class="reveal"><div class="q">1. 두 함수 vA(t), vB(t)</div><div class="ans hidden" id="rv1"></div><button class="btn small soft pz-btn pz-btn-soft" data-rv="1">확인</button></div>
+          <div class="reveal"><div class="q">2. 2분 동안 달린 거리</div><div class="ans hidden" id="rv2"></div><button class="btn small soft pz-btn pz-btn-soft" data-rv="2">확인</button></div>
+          <div class="reveal"><div class="q">3. 두 그래프로 둘러싸인 도형의 넓이의 의미</div><div class="hint" style="margin:4px 0 0">모둠에서 토의해 보세요.</div></div>
+          <div class="reveal"><div class="q">4. 두 로봇이 같은 지점에 있게 되는 시각</div><div class="ans hidden" id="rv4"></div><button class="btn small soft pz-btn pz-btn-soft" data-rv="4">확인</button></div>
+        </div>
+      </div>
+      <div class="graphCol">
+        <div class="card">
+          <div class="gHead"><span class="cardTitle" style="margin:0">직선 도로 위의 두 로봇</span><span class="unit">위치 (m)</span></div>
+          <div class="cv"><canvas id="t2rtr"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="gHead"><span class="cardTitle" style="margin:0">두 로봇의 속도 그래프</span><span class="unit" id="t2ru"></span></div>
+          <div class="cv" data-w="1"><canvas id="t2rc"></canvas></div>
+          <div class="gFoot"><div class="legend"><span><i class="ln" style="background:var(--robA)"></i>로봇 A · vA(t)</span><span><i class="ln" style="background:var(--robB)"></i>로봇 B · vB(t)</span><span>● 측정한 값</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 3. 내가 만든 예 ===================== -->
+  <section id="t3" class="view">
+    <div class="layout">
+      <div class="ctrl">
+    <div class="cardSoft intro">
+      <span class="ref">미션</span>
+      <p><b>출발점으로 돌아오는 로봇</b>을 만들어요. 로봇은 0분과 8분에 멈춰 있어요. 1~7분의 점을 위아래로 끌어 속도 그래프를 만들고, <b><span class="pz-term" data-tip="위치의 변화량">위치의 변화량</span>은 0</b>, <b><span class="pz-term" data-tip="움직인 거리">움직인 거리</span>는 16 m 이상</b>이 되게 하세요. (최고 <span class="pz-term" data-tip="속력">속력</span> 4 m/분)<br>성공하면 이 운동에 어울리는 <b>이야기 한 줄</b>을 붙여 저장해요.</p>
+    </div>
+        <div class="card">
+          <div class="meters">
+            <div class="meter f"><span>파란 넓이 (앞으로)</span><b id="t3P"></b></div>
+            <div class="meter b"><span>빨간 넓이 (뒤로)</span><b id="t3N"></b></div>
+            <div class="meter d"><span>위치의 변화량</span><b id="t3D"></b></div>
+            <div class="meter o"><span>움직인 거리</span><b id="t3O"></b></div>
+          </div>
+          <p class="status" id="t3stat"></p>
+          <div class="btnRow"><button class="btn primary pz-btn pz-btn-primary" id="t3play">▶ 달려 보기</button><button class="btn pz-btn pz-btn-ghost" id="t3zero">↺ 모두 0으로</button></div>
+        </div>
+        <div class="card">
+          <div class="cardTitle">이 운동은 어떤 이야기일까?</div>
+          <textarea class="memo" id="t3story" maxlength="80" rows="2" placeholder="예) 도서관 반납 로봇이 … 갔다가 … 돌아왔다"></textarea>
+          <div class="count" id="t3cnt">0 / 80</div>
+          <div class="btnRow"><button class="btn primary pz-btn pz-btn-primary" id="t3save">이 예 저장</button></div>
+          <p class="hint" id="t3msg"></p>
+        </div>
+        <div class="card">
+          <div class="cardTitle">내가 만든 예 <span class="cnt" id="t3sCnt">0 / 3</span></div>
+          <div id="t3saved"><p class="hint">아직 저장한 예가 없어요.</p></div>
+        </div>
+      </div>
+      <div class="graphCol">
+        <div class="card">
+          <div class="gHead"><span class="cardTitle" style="margin:0">속도 그래프 만들기 — 점을 위아래로 끌어요</span><span class="unit" id="t3u"></span></div>
+          <div class="cv drag" data-w="1"><canvas id="t3c"></canvas></div>
+          <div class="gFoot"><div class="legend"><span><i class="fill-pos"></i><b class="sg p">+</b> 앞으로 →</span><span><i class="fill-neg"></i><b class="sg n">−</b> 뒤로 ←</span><span>t: 분, v: m/분</span></div><span class="dragNote">✋ 0.5 단위 · −4 ~ 4 (점선)까지</span></div>
+        </div>
+        <div class="card">
+          <div class="gHead"><span class="cardTitle" style="margin:0">수직선 위의 로봇</span><span class="unit">위치 (m)</span></div>
+          <div class="cv"><canvas id="t3tr"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 4. 열린 질문 ===================== -->
+  <section id="t4" class="view">
+    <div class="qBox">
+      <div class="cardSoft intro">
+        <span class="ref">열린 질문</span>
+        <p>생활 속에서 <b><span class="pz-term" data-tip="위치의 변화량">위치의 변화량</span></b>과 <b><span class="pz-term" data-tip="움직인 거리">움직인 거리</span></b> 중 무엇을 재는 것이 알맞을까요?<br>상황을 하나 골라(또는 직접 써서), 무엇을 재야 하는지 <b>이유와 함께 1~2문장</b>으로 답해요. 정답은 하나가 아니에요.</p>
+      </div>
+      <div class="card">
+        <div class="cardTitle">상황 고르기</div>
+        <div class="chips" id="t4sit" style="margin-bottom:8px"></div>
+        <input class="memo" id="t4sitTxt" maxlength="40" placeholder="상황을 직접 써도 돼요 (예: 수영장 왕복)">
+        <div class="cardTitle" style="margin-top:14px">무엇을 재야 할까?</div>
+        <div class="seg" id="t4pick"><button data-p="위치의 변화량">위치의 변화량</button><button data-p="움직인 거리">움직인 거리</button><button data-p="둘 다 필요">둘 다 필요</button></div>
+        <div class="cardTitle" style="margin-top:14px">이유 (1~2문장)</div>
+        <textarea class="memo" id="t4why" maxlength="200" rows="3" placeholder="예) ○○에서는 … 이기 때문에 … 을 재야 한다."></textarea>
+        <div class="count" id="t4cnt">0 / 200</div>
+        <div class="btnRow"><button class="btn primary pz-btn pz-btn-primary" id="t4save">답 저장</button></div>
+        <div id="t4list"></div>
+      </div>
+      <div class="card">
+        <div class="cardTitle">내 활동 기록</div>
+        <input class="memo" id="nick" maxlength="12" placeholder="이름 또는 닉네임" style="max-width:240px">
+        <p class="hint">관찰 기록, 내가 만든 예, 열린 질문 답을 한 번에 복사해서 제출할 수 있어요.</p>
+        <div class="btnRow"><button class="btn primary pz-btn pz-btn-primary" id="recCopy">기록 복사하기</button><button class="btn soft pz-btn pz-btn-soft" id="recShow">미리 보기</button></div>
+        <pre class="rec hidden" id="recPrev"></pre>
+      </div>
+    </div>
+  </section>
+
+  <p class="footer">✏️ made by 지인섭</p>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   공통 유틸
+   ========================================================= */
+const $ = id => document.getElementById(id);
+const MINUS = '−';
+/* [2단계] 테마 색 읽기: 그래프 의미 색은 모두 --pz-* 토큰에서 (PastelUI.color). PastelUI가 없을 때를 대비해 CSS 변수를 직접 읽는 대체 경로. */
+function tok(name){
+  if (window.PastelUI) return PastelUI.color(name);
+  let v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(), g = 0;
+  while (/^var\(/.test(v) && g++ < 6) v = getComputedStyle(document.documentElement).getPropertyValue(v.replace(/^var\(\s*|\s*\)$/g,'')).trim();
+  return v || '#888';
+}
+function alpha(c, a){ const m = /^#([0-9a-f]{6})$/i.exec(c); if (!m) return c; const n = parseInt(m[1],16); return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`; }
+/* [2단계] 화면 확대 비율(#pz-main 의 CSS zoom): 화면 px ÷ CSS px. 드래그 좌표·캔버스 해상도에 사용 */
+function cssScale(el){ const r = el.getBoundingClientRect(); return (el.clientWidth > 0 && r.width > 0) ? r.width / el.clientWidth : 1; }
+const CHART_FONT = '"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+function haloText(ctx, text, x, y, color){
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+  ctx.strokeText(text, x, y); ctx.fillStyle = color; ctx.fillText(text, x, y); ctx.restore();
+}
+/* [2단계] 그래프 의미 색: v(t) = --pz-f, 앞으로(+)·양의 넓이 = 하늘(--pz-pos-fill), 뒤로(−)·음의 넓이 = 산호(--pz-neg-fill),
+   지금 시각 = --pz-point, 로봇 A = --pz-accent-btn(복숭아), 로봇 B = --pz-sky-line(하늘) */
+const COL = { v:tok('--pz-f'), vInk:tok('--pz-sky-ink'), orig:tok('--pz-faint'), A:tok('--pz-accent-btn'), B:tok('--pz-sky-line'),
+  AInk:tok('--pz-accent-ink'), BInk:tok('--pz-sky-ink'),
+  pos:tok('--pz-pos-fill'), neg:tok('--pz-neg-fill'), posInk:tok('--pz-sky-ink'), negInk:tok('--pz-rose-ink'),
+  Afill:alpha(tok('--pz-accent-btn'), 0.24), Bfill:alpha(tok('--pz-sky-line'), 0.24),
+  grid:tok('--pz-grid'), axis:tok('--pz-axis'), label:tok('--pz-muted'), ink:tok('--pz-ink'), ink2:tok('--pz-ink2'),
+  fwd:tok('--pz-sky-line'), back:tok('--pz-coral-line'), point:tok('--pz-point'),
+  robot:tok('--pz-accent-btn'), balloon:tok('--pz-accent'), ball:tok('--pz-butter-line'), basket:tok('--pz-butter-ink') };
+function cheer(key, msg){ if (window.PastelUI) PastelUI.celebrate('3-5-' + key, msg); }   // [2단계] 탭·미션 첫 완료 때 한 번만
+function r3(v){ return Math.round(v*1000)/1000; }
+function fnum(v){ v = r3(v); if (Math.abs(v)<1e-12) v = 0; return (v<0?MINUS:'') + String(Math.abs(v)); }
+function f2(v){ return fnum(Math.round(v*100)/100); }
+function frac(v){
+  if (v==null || !isFinite(v)) return MINUS;
+  const s = v < -1e-9 ? MINUS : ''; v = Math.abs(v);
+  // [1단계 수정] 허용 오차 1e-7 → 1e-10(상대), 분수로 못 나타내는 어림값에는 ≈ 표시
+  // (이전: 7.0021이 ‘7’, 9.5042가 ‘9.5’처럼 정확한 값으로 보였음)
+  for (let q=1; q<=120; q++){ const n = Math.round(v*q); if (Math.abs(n/q - v) < 1e-10*Math.max(1,v)) return q===1 ? s+n : s+n+'/'+q; }
+  return '≈ ' + s + (Math.round(v*100)/100);
+}
+function fracHTML(v, unit=''){
+  const f = frac(v), u = unit ? ` <small>${unit}</small>` : '';
+  return f.includes('/') ? `${f}${u} <small>≈ ${f2(v)}</small>` : f + u;
+}
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),1700); }
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtPolyT(c){   // c[i] = t^i 의 계수
+  const t = [], body = ['', 't', 't²', 't³'];
+  for (let i=c.length-1;i>=0;i--){
+    const k = r3(c[i]||0); if (Math.abs(k)<1e-9) continue;
+    const ab = Math.abs(k);
+    t.push({ neg:k<0, s: (i>0 && Math.abs(ab-1)<1e-9) ? body[i] : fnum(ab)+body[i] });   // [1단계 수정] ‘1/2t²’(1/(2t²)로 읽힘) → ‘0.5t²’
+  }
+  if (!t.length) return '0';
+  return t.map((o,i)=> i===0 ? (o.neg?MINUS:'')+o.s : (o.neg?' '+MINUS+' ':' + ')+o.s).join('');
+}
+
+/* =========================================================
+   속도 함수: 여러 조각의 다항식(차수 ≤ 2)  pieces=[{t0,t1,c}]
+   ========================================================= */
+const pEval = (c,t) => { let s=0; for (let i=c.length-1;i>=0;i--) s = s*t + c[i]; return s; };
+const pAnti = (c,t) => { let s=0; for (let i=c.length-1;i>=0;i--) s = s*t + c[i]/(i+1); return s*t; };
+function pRoots(c, lo, hi){
+  const c0=c[0]||0, c1=c[1]||0, c2=c[2]||0, out=[];
+  if (Math.abs(c2) < 1e-12){ if (Math.abs(c1) > 1e-12) out.push(-c0/c1); }
+  else { const D=c1*c1-4*c2*c0; if (D >= -1e-12){ const s=Math.sqrt(Math.max(0,D)); out.push((-c1-s)/(2*c2), (-c1+s)/(2*c2)); } }
+  return out.filter(r => r > lo+1e-9 && r < hi-1e-9);
+}
+const makePoly = (c, T) => ({ pieces:[{ t0:0, t1:T, c }], T });
+function makePL(pts){
+  const pieces = [];
+  for (let i=0;i<pts.length-1;i++){
+    const [ta,va] = pts[i], [tb,vb] = pts[i+1], m = (vb-va)/(tb-ta);
+    pieces.push({ t0:ta, t1:tb, c:[va - m*ta, m] });
+  }
+  return { pieces, T: pts[pts.length-1][0], pts };
+}
+function pieceAt(V,t){ for (const p of V.pieces) if (t >= p.t0-1e-12 && t <= p.t1+1e-12) return p; return t < V.pieces[0].t0 ? V.pieces[0] : V.pieces[V.pieces.length-1]; }
+const vAt = (V,t) => pEval(pieceAt(V,t).c, t);
+/* 구간 [a,b]를 속도의 부호가 같은 조각으로 나눔 */
+function splitV(V, a, b){
+  if (b <= a) return [];
+  let cuts = [a, b];
+  V.pieces.forEach(p=>{
+    const lo = Math.max(a,p.t0), hi = Math.min(b,p.t1); if (hi <= lo) return;
+    if (p.t0 > a && p.t0 < b) cuts.push(p.t0);
+    if (p.t1 > a && p.t1 < b) cuts.push(p.t1);
+    cuts.push(...pRoots(p.c, lo, hi));
+  });
+  cuts = [...new Set(cuts.map(x=>Math.round(x*1e9)/1e9))].sort((x,y)=>x-y);
+  const out = [];
+  for (let i=0;i<cuts.length-1;i++){
+    const ta = cuts[i], tb = cuts[i+1]; if (tb-ta < 1e-12) continue;
+    const p = pieceAt(V,(ta+tb)/2), I = pAnti(p.c,tb) - pAnti(p.c,ta);
+    const vm = pEval(p.c,(ta+tb)/2);
+    out.push({ ta, tb, I, sign: Math.abs(vm) < 1e-12 ? 0 : Math.sign(vm) });
+  }
+  return out;
+}
+function measure(V, a, b){
+  let P=0, N=0; splitV(V,a,b).forEach(s=>{ if (s.I > 0) P += s.I; else N -= s.I; });
+  return { P, N, D: P-N, O: P+N };
+}
+const posAt = (sc,t) => sc.x0 + measure(sc.V, 0, t).D;
+/* 지나온 길을 방향이 같은 구간끼리 묶기 */
+function route(sc, a, b){
+  const segs = [];
+  splitV(sc.V, a, b).forEach(s=>{
+    if (s.sign === 0) return;
+    const last = segs[segs.length-1];
+    if (last && last.dir === s.sign) last.tb = s.tb; else segs.push({ ta:s.ta, tb:s.tb, dir:s.sign });
+  });
+  return segs.map(g=>({ xa:posAt(sc,g.ta), xb:posAt(sc,g.tb), dir:g.dir }));
+}
+
+/* =========================================================
+   좌표평면 렌더러 (한 칸 정사각형, 칸의 값 지정)
+   ========================================================= */
+const PLOTS = [];   // [2단계] 화면 높이에 맞춰 그래프 크기를 정하려고 모아 둠 (Track도 함께: 높이 고정)
+class Plot{
+  constructor(id){
+    this.c = $(id); this.wrap = this.c.parentElement; this.lastW = 0; this.v = null; this.L = null;
+    this.maxH = Infinity; this.w = +(this.wrap.dataset.w || 1); PLOTS.push(this);
+    if (window.ResizeObserver) new ResizeObserver(()=>{ if (this.wrap.clientWidth !== this.lastW) this.render(); }).observe(this.wrap);
+    else window.addEventListener('resize', ()=>this.render());
+  }
+  set(v, L){ if (v) this.v = v; if (L) this.L = L; this.render(); }
+  toData(px, py){ const m = this.m; if (!m) return null; return { x: m.v.xMin + (px-m.pl)/m.cell*m.v.xu, y: m.v.yMax - (py-m.pt)/m.cell*m.v.yu }; }
+  render(){
+    const v = this.v, LY = this.L, W = this.wrap.clientWidth;
+    if (!v || !LY) return;
+    if (!W){ this.lastW = 0; return; }
+    this.lastW = W;
+    const pl=46, pr=16, pt=14, pb=30;
+    const cols = Math.max(1, Math.round((v.xMax-v.xMin)/v.xu)), rows = Math.max(1, Math.round((v.yMax-v.yMin)/v.yu));
+    // [2단계] 한 칸은 정사각형 그대로, 화면 높이(maxH)를 넘으면 칸을 줄이고 그래프를 가운데로
+    let cell = (W-pl-pr)/cols;
+    if (isFinite(this.maxH)) cell = Math.max(3, Math.min(cell, (this.maxH-pt-pb)/rows));
+    const pw = cols*cell, ph = rows*cell, H = Math.round(ph+pt+pb), CW = Math.min(W, Math.round(pw+pl+pr));
+    const dpr = Math.min(window.devicePixelRatio||1, 2.5) * cssScale(this.wrap), c = this.c;   // [2단계] 글자 크기(zoom)만큼 해상도↑
+    c.style.width = CW+'px'; c.style.height = H+'px'; c.width = Math.round(CW*dpr); c.height = Math.round(H*dpr);
+    const ctx = c.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+    const X = x => pl + (x-v.xMin)/v.xu*cell, Y = y => pt + (v.yMax-y)/v.yu*cell;
+    this.m = { v, pl, pt, cell, X, Y };
+    const line = (x1,y1,x2,y2)=>{ ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); };
+    ctx.strokeStyle = COL.grid; ctx.lineWidth = 1;
+    for (let i=0;i<=cols;i++){ const px = Math.round(pl+i*cell)+.5; line(px,pt,px,pt+ph); }
+    for (let j=0;j<=rows;j++){ const py = Math.round(pt+j*cell)+.5; line(pl,py,pl+pw,py); }
+    ctx.strokeStyle = COL.axis; ctx.lineWidth = 1.5;
+    if (v.yMin<=0 && v.yMax>=0) line(pl, Y(0), pl+pw, Y(0));
+    if (v.xMin<=0 && v.xMax>=0) line(X(0), pt, X(0), pt+ph);
+    ctx.font = '500 13px ' + CHART_FONT; ctx.fillStyle = COL.label;   // [2단계] 눈금 13px
+    const tick = x => f2(x);
+    const wMax = Math.max(...[v.xMin, v.xMax, v.xMin+v.xu].map(x=>ctx.measureText(tick(x)).width)) + 10;
+    const ex = Math.max(1, Math.ceil(wMax/cell)), ey = Math.max(1, Math.ceil(18/cell));
+    ctx.textAlign = 'center';
+    for (let i=0;i<=cols;i++){ const x=v.xMin+i*v.xu; if (Math.round(x/v.xu) % ex !== 0) continue; ctx.fillText(tick(x), pl+i*cell, pt+ph+20); }
+    ctx.textAlign = 'right';
+    for (let j=0;j<=rows;j++){ const y=v.yMin+j*v.yu; if (Math.round(y/v.yu) % ey !== 0) continue; ctx.fillText(tick(y), pl-7, Y(y)+4.5); }
+    if (LY.axisNames){ ctx.font='italic 700 14px ' + CHART_FONT; ctx.textAlign='right'; haloText(ctx, LY.axisNames[0], pl+pw-3, (v.yMin<=0&&v.yMax>=0?Y(0):pt+ph)-7, COL.ink2); ctx.textAlign='left'; haloText(ctx, LY.axisNames[1], (v.xMin<=0&&v.xMax>=0?X(0):pl)+7, pt+14, COL.ink2); }
+
+    ctx.save(); ctx.beginPath(); ctx.rect(pl,pt,pw,ph); ctx.clip();
+    (LY.fills||[]).forEach(fl=>{
+      if (!(fl.R > fl.L + 1e-9)) return;
+      const N = 400, d = x => fl.top(x)-fl.bot(x);
+      const segs = []; let s0 = fl.L, x0 = fl.L, d0 = d(fl.L);
+      for (let i=1;i<=N;i++){
+        const x1 = fl.L + (fl.R-fl.L)*i/N, d1 = d(x1);
+        if (Math.abs(d1) < 1e-12){ if (x1 > s0 + 1e-12 && i < N){ segs.push([s0,x1]); s0 = x1; } x0 = x1; d0 = 0; continue; }   // 표본점에서 정확히 0일 때
+        if (Math.abs(d0) > 1e-12 && d0*d1 < 0){ const xr = x0 + (x1-x0)*d0/(d0-d1); segs.push([s0,xr]); s0 = xr; }
+        x0 = x1; d0 = d1;
+      }
+      segs.push([s0, fl.R]);
+      segs.forEach(([a,b])=>{
+        if (b-a < 1e-9) return;
+        ctx.fillStyle = d((a+b)/2) >= 0 ? fl.pos : fl.neg;
+        const M = Math.max(12, Math.ceil(N*(b-a)/(fl.R-fl.L)));
+        ctx.beginPath();
+        for (let i=0;i<=M;i++){ const x=a+(b-a)*i/M; i?ctx.lineTo(X(x),Y(fl.top(x))):ctx.moveTo(X(x),Y(fl.top(x))); }
+        for (let i=M;i>=0;i--){ const x=a+(b-a)*i/M; ctx.lineTo(X(x),Y(fl.bot(x))); }
+        ctx.closePath(); ctx.fill();
+        // [2단계] 색+기호: 양(앞으로)/음(뒤로)의 넓이 칸에 +/− 기호
+        if (fl.signs && X(b)-X(a) > 22){
+          const m = (a+b)/2, hpx = Math.abs(Y(fl.top(m))-Y(fl.bot(m)));
+          if (hpx > 22){ const pos = d(m) >= 0; ctx.font = '800 20px ' + CHART_FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            haloText(ctx, pos ? '+' : MINUS, X(m), Y((fl.top(m)+fl.bot(m))/2), pos ? COL.posInk : COL.negInk); ctx.textBaseline = 'alphabetic'; }
+        }
+      });
+    });
+    // [2단계] 가로 점선(속력 한계 ±4 등)
+    (LY.hlines||[]).forEach(hl=>{
+      ctx.strokeStyle = hl.color||COL.axis; ctx.lineWidth = 1.6; ctx.setLineDash([6,5]);
+      line(pl, Y(hl.y), pl+pw, Y(hl.y)); ctx.setLineDash([]);
+    });
+    (LY.vlines||[]).forEach(vl=>{
+      ctx.strokeStyle = vl.color||COL.axis; ctx.lineWidth = vl.width||1.5; ctx.setLineDash(vl.solid?[]:[4,4]);
+      line(X(vl.x), pt, X(vl.x), pt+ph); ctx.setLineDash([]);
+    });
+    const labels = [];
+    (LY.curves||[]).forEach(cv=>{
+      ctx.strokeStyle = cv.color; ctx.lineWidth = cv.width||3.2; ctx.setLineDash(cv.dash||[]); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath(); const N = 600, a = cv.from ?? v.xMin, b = cv.to ?? v.xMax; let started=false;
+      for (let i=0;i<=N;i++){
+        const x = a + (b-a)*i/N; let y = cv.fn(x); if (!isFinite(y)){ started=false; continue; }
+        const span = v.yMax-v.yMin; y = Math.max(v.yMin-span*3, Math.min(v.yMax+span*3, y));
+        if (!started){ ctx.moveTo(X(x),Y(y)); started=true; } else ctx.lineTo(X(x),Y(y));
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+      if (cv.label){
+        for (let i=0;i<=40;i++){
+          const x = b - (b-a)*(0.04 + i*0.022), y = cv.fn(x);
+          if (y < v.yMax - v.yu*0.7 && y > v.yMin + v.yu*0.7){ labels.push({x:X(x), y:Y(y), t:cv.label, c:cv.labelColor||cv.color}); break; }
+        }
+      }
+    });
+    ctx.restore();
+    (LY.points||[]).forEach(p=>{
+      if (p.x<v.xMin-1e-9||p.x>v.xMax+1e-9||p.y<v.yMin-1e-9||p.y>v.yMax+1e-9) return;
+      const r = p.r||4.5;
+      ctx.beginPath(); ctx.arc(X(p.x),Y(p.y),r,0,Math.PI*2);
+      ctx.fillStyle = p.fill||p.color||COL.ink2; ctx.fill();
+      ctx.lineWidth = p.ring||2; ctx.strokeStyle = p.ringColor||'#fff'; ctx.stroke();
+      if (p.text){ ctx.font='800 15px ' + CHART_FONT; ctx.textAlign='center'; const ty = Y(p.y) + (p.y>=0?-17:27); haloText(ctx, p.text, X(p.x), ty, p.textColor||p.color||COL.ink); }
+    });
+    ctx.font = '700 14px ' + CHART_FONT; ctx.textAlign = 'right';   // [2단계] 곡선 이름표: 선 색 + 흰 테두리 14px
+    labels.forEach(l=>haloText(ctx, l.t, l.x, l.y-10, l.c));
+  }
+}
+const NICE = [0.25,0.5,1,2,4,5,10,20,25,50,100,200];
+function niceUp(v){ for (const n of NICE) if (n >= v-1e-9) return n; return 500; }
+function fitView(x0,x1,y0,y1,cols=12,ratio=0.8){
+  const xu = niceUp((x1-x0)/cols);
+  const X0 = Math.floor(x0/xu+1e-9)*xu, X1 = Math.ceil(x1/xu-1e-9)*xu;
+  const nc = Math.round((X1-X0)/xu), maxRows = Math.max(4, Math.round(nc*ratio));
+  let yu = xu;
+  if ((y1-y0)/yu > maxRows) yu = niceUp((y1-y0)/maxRows);
+  while ((y1-y0)/yu < nc*0.4 && NICE.indexOf(yu) > 0) yu = NICE[NICE.indexOf(yu)-1];
+  const Y0 = Math.floor(y0/yu+1e-9)*yu, Y1 = Math.ceil(y1/yu-1e-9)*yu;
+  return { xMin:X0, xMax:X1, yMin:Y0, yMax:Y1, xu, yu };
+}
+function fitV(V){
+  const T = V.T; let lo = 0, hi = 0;
+  for (let i=0;i<=200;i++){ const y = vAt(V, T*i/200); lo = Math.min(lo,y); hi = Math.max(hi,y); }
+  const pad = Math.max(0.5, (hi-lo)*0.1);
+  return fitView(0, T, lo-pad, hi+pad, Math.min(12, Math.max(6, T*2)));
+}
+const unitText = v => `한 칸: 가로 ${fnum(v.xu)}, 세로 ${fnum(v.yu)}`;
+
+/* =========================================================
+   수직선 트랙 (로봇·지나온 길)
+   s = { xMin,xMax, label, flags:[{x,text}], segs:[{xa,xb,dir}], robots:[{x,color,dir,kind,label}] }
+   ========================================================= */
+class Track{
+  constructor(id){
+    this.c = $(id); this.wrap = this.c.parentElement; this.lastW = 0; this.s = null;
+    if (window.ResizeObserver) new ResizeObserver(()=>{ if (this.wrap.clientWidth !== this.lastW) this.render(); }).observe(this.wrap);
+    else window.addEventListener('resize', ()=>this.render());
+  }
+  set(s){ this.s = s; this.render(); }
+  render(){
+    const s = this.s, W = this.wrap.clientWidth; if (!s) return;
+    if (!W){ this.lastW = 0; return; }
+    this.lastW = W;
+    const pl = 26, pr = 30, laneH = 14;
+    const segs = s.segs||[], robots = s.robots||[], rows = Math.max(1, robots.length);
+    const laneTop = 12, rowTop = laneTop + segs.length*laneH + (segs.length?10:0) + 6;
+    // [2단계] 열기구(높이 45px)가 들어가게 줄 높이 52, 축 아래에 눈금 + '출발' 깃발 글자 줄
+    const rowH = 52, axisY = rowTop + rows*rowH, H = axisY + 52;
+    const dpr = Math.min(window.devicePixelRatio||1,2.5) * cssScale(this.wrap), c = this.c;   // [2단계] 글자 크기만큼 해상도↑
+    c.style.width = W+'px'; c.style.height = H+'px'; c.width = Math.round(W*dpr); c.height = Math.round(H*dpr);
+    const ctx = c.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+    const X = x => pl + (x-s.xMin)/(s.xMax-s.xMin)*(W-pl-pr);
+    const line = (x1,y1,x2,y2)=>{ ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); };
+    const arrowHead = (x,y,dir,col)=>{ ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-dir*9,y-5); ctx.lineTo(x-dir*9,y+5); ctx.closePath(); ctx.fill(); };
+    // 축
+    ctx.strokeStyle = COL.axis; ctx.lineWidth = 2; line(pl-12, axisY, W-pr+16, axisY); arrowHead(W-pr+20, axisY, 1, COL.axis);
+    // 눈금
+    const span = s.xMax - s.xMin, maxTicks = Math.max(4, Math.floor((W-pl-pr)/50));
+    let step = [0.5,1,2,5,10,20,25,50,100,200,500].find(st => span/st <= maxTicks) || 1000;
+    ctx.font = '500 13px ' + CHART_FONT; ctx.textAlign = 'center'; ctx.fillStyle = COL.label; ctx.lineWidth = 1.4;
+    for (let x = Math.ceil(s.xMin/step-1e-9)*step; x <= s.xMax+1e-9; x += step){
+      ctx.strokeStyle = COL.axis; line(X(x), axisY-4, X(x), axisY+4); ctx.fillText(f2(x), X(x), axisY+20);
+    }
+    // [2단계] 깃발('출발', 't = a'): 축 위 로봇·열기구와 겹치지 않게 축 아래 줄에 ▲ 표시 + 글자
+    const flagBoxes = [];
+    (s.flags||[]).forEach(f=>{
+      const x = X(f.x);
+      ctx.strokeStyle = COL.point; ctx.lineWidth = 3; ctx.lineCap = 'round'; line(x, axisY-7, x, axisY+7);
+      if (f.text){
+        ctx.font = '700 13px ' + CHART_FONT; const t = '▲ ' + f.text, w = ctx.measureText(t).width;
+        const lx = Math.max(2, Math.min(W - w - 2, x - w/2)); ctx.textAlign = 'left';
+        haloText(ctx, t, lx, axisY+40, COL.AInk); flagBoxes.push([lx, lx+w]);
+      }
+    });
+    if (s.label){
+      ctx.font = '700 13px ' + CHART_FONT; const w = ctx.measureText(s.label).width, lx = W - 4 - w;
+      const hit = flagBoxes.some(([a,b])=> b > lx - 8 && a < W);
+      ctx.textAlign = 'left'; haloText(ctx, s.label, lx, hit ? axisY-10 : axisY+40, COL.ink2);
+    }
+    // 지나온 길: 앞으로(→) = 하늘, 뒤로(←) = 산호
+    segs.forEach((g,i)=>{
+      const y = laneTop + i*laneH + 5, col = g.dir>0 ? COL.fwd : COL.back;
+      if (Math.abs(X(g.xb)-X(g.xa)) < 2) return;
+      ctx.strokeStyle = col; ctx.lineWidth = 3.5; ctx.lineCap='round';
+      line(X(g.xa), y, X(g.xb) - g.dir*7, y); arrowHead(X(g.xb), y, g.dir, col);
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(X(g.xa), y, 3, 0, Math.PI*2); ctx.fill();
+      ctx.setLineDash([2,4]); ctx.lineWidth=1.2; ctx.strokeStyle=alpha(COL.ink2, .3); line(X(g.xb), y+4, X(g.xb), axisY-2); ctx.setLineDash([]);
+    });
+    // 로봇
+    robots.forEach((r,i)=>{
+      const cx = X(r.x), by = rowTop + (i+1)*rowH;
+      if (by < axisY - 1){ ctx.setLineDash([3,4]); ctx.strokeStyle = r.color; ctx.lineWidth = 1.4; line(cx, by, cx, axisY); ctx.setLineDash([]); }
+      drawBot(ctx, cx, by, r);
+    });
+  }
+}
+function rr(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function drawBot(ctx, cx, by, r){
+  const col = r.color || COL.robot, dir = r.dir || 0;
+  if (r.kind === 'ball'){
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(cx, by-11, 10, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1.8; ctx.beginPath(); ctx.arc(cx, by-11, 6, -0.6, 1.2); ctx.stroke();
+  } else if (r.kind === 'balloon'){
+    ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(cx, by-30, 11, 13, 0, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = COL.label; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(cx-6,by-19); ctx.lineTo(cx-3,by-9); ctx.moveTo(cx+6,by-19); ctx.lineTo(cx+3,by-9); ctx.stroke();
+    ctx.fillStyle = COL.basket; rr(ctx, cx-5, by-9, 10, 8, 2); ctx.fill();
+  } else {
+    ctx.fillStyle = COL.ink2; ctx.beginPath(); ctx.arc(cx-8, by-4.5, 4.5, 0, Math.PI*2); ctx.arc(cx+8, by-4.5, 4.5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = col; rr(ctx, cx-13, by-24, 26, 16, 5); ctx.fill();
+    rr(ctx, cx-10, by-37, 20, 12, 4); ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx, by-37); ctx.lineTo(cx, by-42); ctx.stroke();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(cx, by-43, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx-4+dir*2, by-31, 2.8, 0, Math.PI*2); ctx.arc(cx+4+dir*2, by-31, 2.8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = COL.ink; ctx.beginPath(); ctx.arc(cx-4+dir*3, by-31, 1.3, 0, Math.PI*2); ctx.arc(cx+4+dir*3, by-31, 1.3, 0, Math.PI*2); ctx.fill();
+  }
+  // [2단계] 이름표 14px 굵게 + 흰 테두리, 위치값(sub)을 함께 → 초반에 두 로봇이 가까워도 누가 앞인지 읽힘
+  if (r.label){ ctx.font='800 15px ' + CHART_FONT; ctx.textAlign='left'; haloText(ctx, r.label + (r.sub ? '  ' + r.sub : ''), cx+16, by-24, r.labelColor || col); }
+}
+function trackRange(sc, extra=[]){
+  const xs = [sc.x0, ...extra];
+  for (let i=0;i<=200;i++) xs.push(posAt(sc, sc.V.T*i/200));
+  let lo = Math.min(...xs), hi = Math.max(...xs); const pad = Math.max(0.5,(hi-lo)*0.08);
+  return { xMin: Math.floor(lo-pad), xMax: Math.ceil(hi+pad) };
+}
+
+/* 슬라이더 + 숫자칸 동기화 (bindPair 패턴) */
+function makeSlider(host, o){
+  const row = document.createElement('div'); row.className = 'sRow';
+  row.innerHTML = `<div class="sHead"><span class="sLab">${o.label}</span><input type="number" class="miniInput" step="${o.step}" inputmode="decimal"></div><input type="range" min="${o.min}" max="${o.max}" step="${o.step}">`;
+  host.appendChild(row);
+  const num = row.querySelector('input[type=number]'), rng = row.querySelector('input[type=range]');
+  const sync = () => { rng.min = o.min; rng.max = o.max; const v = o.get(); rng.value = v; num.value = r3(v); };
+  rng.addEventListener('input', ()=>{ o.set(+rng.value); num.value = r3(o.get()); o.onInput && o.onInput(); });
+  num.addEventListener('input', ()=>{ let v = parseFloat(num.value); if (isNaN(v)) return; v = Math.max(o.min, Math.min(o.max, v)); o.set(v); rng.value = o.get(); o.onInput && o.onInput(); });
+  num.addEventListener('change', sync);
+  sync();
+  return { sync, row, setRange:(mn,mx)=>{ o.min=mn; o.max=mx; sync(); } };
+}
+/* 재생 도우미 */
+function animate(from, to, ms, onStep, onEnd){
+  const t0 = performance.now(); let stop = false;
+  const step = now => {
+    if (stop) return;
+    const k = Math.min(1, (now-t0)/ms);
+    onStep(from + (to-from)*k);
+    if (k < 1) requestAnimationFrame(step); else onEnd && onEnd();
+  };
+  requestAnimationFrame(step);
+  return () => { stop = true; };
+}
+
+/* 저장 */
+const STORE_KEY = 'robot-race-sim-v1';
+function loadAll(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }catch(e){ return {}; } }
+const STORED = loadAll();
+function saveAll(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify({ rows:T1.rows, saved:T3.saved, answers:T4.answers, nick:$('nick').value, pts:T3.v })); }catch(e){} }
+
+/* =========================================================
+   장면(교과서 문항)
+   ========================================================= */
+const SC = {
+  balloon:{ lab:'열기구', desc:'지상에서 출발해 수직으로 올라가는 열기구<br><b class="mono">v(t) = 2</b> (m/s), 0 ≤ t ≤ 10 · 높이를 수직선 위의 위치로 나타냈어요', V:makePoly([2],10), x0:0, tu:'초', xu:'m', kind:'balloon', place:'높이' },
+  ex1:{ lab:'예시 1', desc:'좌표가 2인 점에서 출발<br><b class="mono">v(t) = 3 − t</b>, 0 ≤ t ≤ 6', V:makePoly([3,-1],6), x0:2, tu:'', xu:'', kind:'robot', a:2, b:6 },
+  p1:{ lab:'예시 2', desc:'원점에서 출발<br><b class="mono">v(t) = 6t − 3t²</b>, 0 ≤ t ≤ 3', V:makePoly([0,6,-3],3), x0:0, tu:'', xu:'', kind:'robot', a:1, b:3, hide:true },
+  p2:{ lab:'예시 3', desc:'원점에서 출발<br><b>v(t)는 오른쪽 꺾은선 그래프</b>, 0 ≤ t ≤ 9', V:makePL([[0,0],[2,2],[4,-2],[6,2],[9,0]]), x0:0, tu:'', xu:'', kind:'robot', a:0, b:9, hide:true },
+  p3:{ lab:'예시 4', desc:'지면에서 1 m 높이에서 쏘아 올린 공<br><b class="mono">v(t) = 20 − 10t</b> (m/s), 0 ≤ t ≤ 4 · 높이를 수직선 위의 위치로 나타냈어요', V:makePoly([20,-10],4), x0:1, tu:'초', xu:'m', kind:'ball', a:0, b:4, hide:true },
+};
+const withU = (v, sc, f=f2) => f(v) + (sc.xu ? ' ' + sc.xu : '');
+
+/* =========================================================
+   1. 관찰
+   ========================================================= */
+const T1 = { key:'balloon', t:0, stop:null, rows: Array.isArray(STORED.rows) ? STORED.rows : [], lastSign:1 };
+const t1Plot = new Plot('t1c'), t1Track = new Track('t1tr');
+$('t1chips').innerHTML = ['balloon','ex1'].map(k=>`<button class="chip" data-k="${k}">${SC[k].lab}</button>`).join('');
+$('t1chips').querySelectorAll('.chip').forEach(b=>b.onclick=()=>t1Select(b.dataset.k));
+const t1tS = makeSlider($('t1tHost'), { label:'시각 t', min:0, max:10, step:0.1, get:()=>T1.t, set:v=>{ T1.t = v; }, onInput:()=>{ t1Stop(); t1Update(); } });
+function t1Select(k){
+  t1Stop(); T1.key = k; T1.t = 0; const sc = SC[k];
+  T1.view = fitV(sc.V); T1.range = trackRange(sc);
+  t1tS.setRange(0, sc.V.T);
+  $('t1chips').querySelectorAll('.chip').forEach(b=>b.classList.toggle('on', b.dataset.k===k));
+  $('t1desc').innerHTML = sc.desc; t1Update();
+}
+function t1Update(){
+  const sc = SC[T1.key], t = T1.t, v = vAt(sc.V,t), m = measure(sc.V,0,t), x = sc.x0 + m.D;
+  const tu = sc.tu ? ' ' + sc.tu : '';
+  $('t1v').textContent = f2(v) + (sc.xu ? ` ${sc.xu}/${sc.tu}` : '');
+  $('t1x').textContent = withU(x, sc);
+  $('t1d').innerHTML = withU(m.D, sc).replace(/ (m)$/,' <small>m</small>');
+  $('t1o').innerHTML = withU(m.O, sc).replace(/ (m)$/,' <small>m</small>');
+  const sg = Math.sign(r3(v));
+  if (sg !== 0 && T1.lastSign !== 0 && sg !== T1.lastSign && T1.stop) toast('로봇이 방향을 바꿨어요! (속도 0)');
+  if (sg !== 0) T1.lastSign = sg;
+  t1Plot.set(T1.view, {
+    axisNames:['t','v'],
+    fills:[{ top:s=>vAt(sc.V,s), bot:()=>0, L:0, R:t, pos:COL.pos, neg:COL.neg, signs:true }],
+    vlines:[{ x:t, color:COL.point, solid:true, width:2 }],
+    curves:[{ fn:s=>vAt(sc.V,s), color:COL.v, width:3.2, from:0, to:sc.V.T, label:'v(t)', labelColor:COL.vInk }],
+    points:[{ x:t, y:v, fill:'#fff', ringColor:COL.point, ring:3.5, r:7 }]   // [2단계] 움직이는 점 = 흰 채움 + --pz-point 테두리
+  });
+  $('t1u').textContent = unitText(T1.view) + (sc.tu ? ` · t: ${sc.tu}` : '');
+  t1Track.set({ ...T1.range, label: sc.place ? `${sc.place}${sc.xu?' ('+sc.xu+')':''}` : '위치',
+    flags:[{ x:sc.x0, text:'출발' }], segs: route(sc,0,t),
+    robots:[{ x, color: sc.kind==='balloon' ? COL.balloon : COL.robot, dir: Math.sign(r3(v)), kind:sc.kind }] });
+  $('t1trU').textContent = sc.tu ? `t = ${f2(t)}${tu}` : `t = ${f2(t)}`;
+}
+function t1Stop(){ if (T1.stop){ T1.stop(); T1.stop = null; $('t1play').textContent = '▶ 재생'; } }
+$('t1play').onclick = ()=>{
+  if (T1.stop){ t1Stop(); return; }
+  const sc = SC[T1.key]; if (T1.t >= sc.V.T - 1e-9) T1.t = 0;
+  T1.lastSign = Math.sign(r3(vAt(sc.V,T1.t))) || 1;
+  $('t1play').textContent = '⏸ 멈춤';
+  const ms = (sc.V.T - T1.t) / sc.V.T * 7000;
+  T1.stop = animate(T1.t, sc.V.T, ms, t=>{ T1.t = t; t1tS.sync(); t1Update(); }, ()=>{ T1.stop = null; $('t1play').textContent = '▶ 재생'; });
+};
+$('t1reset').onclick = ()=>{ t1Stop(); T1.t = 0; t1tS.sync(); t1Update(); };
+$('t1rec').onclick = ()=>{
+  const sc = SC[T1.key], m = measure(sc.V,0,T1.t);
+  const row = { k:T1.key, sc: sc.lab.replace(/ \(.*\)/,''), t:r3(T1.t), x:f2(sc.x0+m.D), d:f2(m.D), o:f2(m.O) };
+  if (T1.rows.some(r=>r.k===row.k && r.t===row.t)){ toast('이미 기록한 시각이에요'); return; }
+  if (T1.rows.length >= 12) T1.rows.shift();
+  T1.rows.push(row); t1Table(); saveAll(); toast('기록했어요');
+};
+function t1Table(){
+  $('t1tbl').innerHTML = T1.rows.length ? T1.rows.map((r,i)=>`<tr><td>${esc(r.sc)}</td><td class="mono">${fnum(r.t)}</td><td class="mono">${esc(r.x)}</td><td class="mono">${esc(r.d)}</td><td class="mono"><b>${esc(r.o)}</b></td><td><button class="del" data-i="${i}" aria-label="지우기">×</button></td></tr>`).join('')
+    : `<tr><td colspan="6" class="hint">아직 기록이 없어요.</td></tr>`;
+  $('t1tbl').querySelectorAll('.del').forEach(b=>b.onclick=()=>{ T1.rows.splice(+b.dataset.i,1); t1Table(); saveAll(); });
+  const ex = T1.rows.filter(r=>r.k==='ex1'), before = ex.some(r=>r.t>0 && r.t<3), after = ex.some(r=>r.t>3);
+  let h = '';
+  if (!T1.rows.some(r=>r.k==='balloon')) h = '열기구를 재생하다가 멈추고 ‘기록하기’를 눌러 보세요. 10초 후의 높이도 기록해요.';
+  else if (!before || !after) h = '예시 1로 바꿔서, 로봇이 방향을 바꾸기 전과 후에 각각 기록해 보세요.';
+  else h = '기록한 위치의 변화량과 움직인 거리를 비교해 보세요.';
+  $('t1hint').textContent = h;
+  $('t1found').classList.toggle('hidden', !(before && after));
+  if (before && after && t1Table.ready && !t1Table.done) cheer('관찰', '🎉 관찰 완료! 방향을 바꾸면 두 계기판이 달라져요');   // [2단계]
+  t1Table.done = before && after;
+}
+
+/* =========================================================
+   2. 조작 — 구간 [a, b]
+   ========================================================= */
+const T2 = { key:'ex1', a:2, b:6, revealed:false, stop:null, custom:{ x0:0, c2:0, c1:-1, c0:3 } };
+SC.custom = { lab:'직접 만들기', desc:'', V:makePoly([3,-1],6), x0:0, tu:'', xu:'', kind:'robot', a:0, b:6 };
+const t2Plot = new Plot('t2c'), t2Track = new Track('t2tr');
+$('t2chips').innerHTML = ['ex1','p1','p2','p3','custom'].map(k=>`<button class="chip" data-k="${k}">${SC[k].lab}</button>`).join('')
+  + `<button class="chip race" data-k="race">🏁 경주 모드</button>`;
+$('t2chips').querySelectorAll('.chip').forEach(b=>b.onclick=()=>t2Select(b.dataset.k));
+const t2aS = makeSlider($('t2aHost'), { label:'시각 a', min:0, max:6, step:0.5, get:()=>T2.a, set:v=>{ T2.a = Math.min(v, T2.b); }, onInput:()=>{ t2Stop(); t2Update(); } });
+const t2bS = makeSlider($('t2bHost'), { label:'시각 b', min:0, max:6, step:0.5, get:()=>T2.b, set:v=>{ T2.b = Math.max(v, T2.a); }, onInput:()=>{ t2Stop(); t2Update(); } });
+const t2Ed = [
+  ['x0','처음 위치',-5,5],['c2','t²의 계수',-2,2],['c1','t의 계수',-6,6],['c0','상수항',-6,6]
+].map(([k,lab,mn,mx])=>makeSlider($('t2editHost'), { label:lab, min:mn, max:mx, step:0.5,
+  get:()=>T2.custom[k], set:v=>{ T2.custom[k] = v; }, onInput:()=>{ if (T2.key!=='custom') t2Select('custom'); else { t2Custom(); t2Update(); } } }));
+function t2Custom(){
+  const c = T2.custom;
+  SC.custom.V = makePoly([c.c0,c.c1,c.c2],6); SC.custom.x0 = c.x0;
+  SC.custom.desc = `처음 위치 ${fnum(c.x0)}<br><b class="mono">v(t) = ${fmtPolyT([c.c0,c.c1,c.c2])}</b>, 0 ≤ t ≤ 6`;
+  T2.view = fitV(SC.custom.V); T2.range = trackRange(SC.custom);
+}
+function t2Select(k){
+  t2Stop(); raceStop();   // [1단계 수정] 경주를 재생한 채 다른 예를 고르면 숨은 화면에서 계속 돌던 문제
+  $('t2chips').querySelectorAll('.chip').forEach(b=>b.classList.toggle('on', b.dataset.k===k));
+  const race = k==='race';
+  $('t2normal').classList.toggle('hidden', race); $('t2race').classList.toggle('hidden', !race);
+  $('t2ref').textContent = race ? '수행평가 활동' : '위치의 변화량과 움직인 거리';
+  $('t2introP').innerHTML = race
+    ? '두 로봇 <b class="rA">A</b>, <b class="rB">B</b>가 직선 도로의 출발점에서 동시에 출발해 같은 방향으로 4분 동안 달려요. 경주를 지켜보며 <b><span class="pz-term" data-tip="속도">속도</span> 그래프</b>와 <b>두 로봇의 위치</b>를 비교해 보세요.'
+    : '시각 a부터 b까지 구간을 바꿔 보세요. 속도 그래프의 <b class="dir f">파란 넓이</b>와 <b class="dir b">빨간 넓이</b>로 <span class="pz-term" data-tip="위치의 변화량">위치의 변화량</span>과 <span class="pz-term" data-tip="움직인 거리">움직인 거리</span>를 비교해요.';
+  // [2단계] 소개·칩은 지금 보이는 모드의 왼쪽 열 맨 위로 옮김(스플릿 뷰에서 그래프 옆에 오도록)
+  const host = $(race ? 't2raceCtrl' : 't2normCtrl');
+  if ($('t2intro').parentElement !== host){ host.prepend($('t2chips')); host.prepend($('t2intro')); }
+  if (window.PastelUI) PastelUI.fade($(race ? 't2race' : 't2normal'));
+  requestAnimationFrame(fitGraphs);
+  if (race){ raceUpdate(); return; }
+  T2.key = k; T2.revealed = false;
+  const sc = SC[k];
+  if (k==='custom'){ t2Custom(); $('t2edit').open = true; }
+  else { T2.view = fitV(sc.V); T2.range = trackRange(sc); }
+  T2.a = sc.a; T2.b = sc.b; T2.runT = null;
+  t2aS.setRange(0, sc.V.T); t2bS.setRange(0, sc.V.T);
+  t2Update();
+}
+function t2Update(){
+  const sc = SC[T2.key], V = sc.V, a = T2.a, b = T2.b, m = measure(V,a,b);
+  const show = !sc.hide || T2.revealed, q = '?';
+  $('t2desc').innerHTML = sc.desc;
+  $('t2int').textContent = `${fnum(a)} ≤ t ≤ ${fnum(b)}`;
+  const u = sc.xu ? ' ' + sc.xu : '';
+  $('t2P').innerHTML = show ? fracHTML(m.P) + u : q;
+  $('t2N').innerHTML = show ? fracHTML(m.N) + u : q;
+  $('t2D').innerHTML = show ? fracHTML(m.D) + u : q;
+  $('t2O').innerHTML = show ? fracHTML(m.O) + u : q;
+  const xa = sc.x0 + measure(V,0,a).D, xb = sc.x0 + measure(V,0,b).D;
+  $('t2formula').innerHTML = show
+    ? `위치의 변화량 = 파랑 − 빨강 = <span class="mono">${frac(m.P)} − ${frac(m.N)} = ${frac(m.D)}</span><br>움직인 거리 = 파랑 + 빨강 = <span class="mono">${frac(m.P)} + ${frac(m.N)} = ${frac(m.O)}</span><br>위치: t = ${fnum(a)}일 때 <span class="mono">${frac(xa)}</span> → t = ${fnum(b)}일 때 <span class="mono">${frac(xb)}</span>`
+    : '위치의 변화량 = 파랑 − 빨강<br>움직인 거리 = 파랑 + 빨강<br><span class="hint">직접 구한 뒤 ‘값 확인’을 눌러 보세요.</span>';
+  $('t2reveal').classList.toggle('hidden', !(sc.hide && !T2.revealed));
+  const tNow = T2.runT ?? b;
+  t2Plot.set(T2.view, {
+    axisNames:['t','v'],
+    fills:[{ top:s=>vAt(V,s), bot:()=>0, L:a, R:b, pos:COL.pos, neg:COL.neg, signs:true }],
+    vlines:[{x:a},{x:b}].concat(T2.runT!=null ? [{ x:tNow, color:COL.point, solid:true, width:2 }] : []),
+    curves:[{ fn:s=>vAt(V,s), color:COL.v, width:3.2, from:0, to:V.T, label:'v(t)', labelColor:COL.vInk }],
+    points: sc.V.pts ? sc.V.pts.map(([t,v])=>({x:t,y:v,color:COL.v,r:4})) : []
+  });
+  $('t2u').textContent = unitText(T2.view) + (sc.tu ? ` · t: ${sc.tu}` : '');
+  const xNow = sc.x0 + measure(V,0,tNow).D;
+  t2Track.set({ ...T2.range, label: sc.xu ? `위치 (${sc.xu})` : '위치',
+    flags:[{ x:xa, text:`t = ${fnum(a)}` }], segs: route(sc, a, tNow),
+    robots:[{ x:xNow, color: sc.kind==='ball' ? COL.ball : COL.robot, dir: Math.sign(r3(vAt(V,tNow))), kind:sc.kind }] });
+  $('t2trU').textContent = `t = ${f2(tNow)}${sc.tu ? ' '+sc.tu : ''}`;
+}
+function t2Stop(){ if (T2.stop){ T2.stop(); T2.stop = null; } T2.runT = null; $('t2run').textContent = '▶ a부터 b까지 달리기'; }
+$('t2run').onclick = ()=>{
+  if (T2.stop){ t2Stop(); t2Update(); return; }
+  if (T2.b - T2.a < 1e-9){ toast('a보다 큰 b를 정해 주세요'); return; }
+  $('t2run').textContent = '⏸ 멈춤';
+  T2.stop = animate(T2.a, T2.b, Math.max(1500, (T2.b-T2.a)/SC[T2.key].V.T*6000), t=>{ T2.runT = t; t2Update(); },
+    ()=>{ T2.stop = null; T2.runT = null; $('t2run').textContent = '▶ a부터 b까지 달리기'; t2Update(); });
+};
+$('t2reveal').onclick = ()=>{ T2.revealed = true; t2Update(); };
+
+/* ---------- 경주 모드 (138쪽) ---------- */
+const VA = makePoly([0,50],4), VB = makePoly([0,50/3,50/3],4);
+const R = { t:0, stop:null, fill:false };
+const raceSA = { V:VA, x0:0 }, raceSB = { V:VB, x0:0 };
+const rPlot = new Plot('t2rc'), rTrack = new Track('t2rtr');
+const rView = fitView(0,4,0,340,8,1.0);
+const rtS = makeSlider($('t2rtHost'), { label:'시각 t (분)', min:0, max:4, step:0.05, get:()=>R.t, set:v=>{ R.t = v; }, onInput:()=>{ raceStop(); raceUpdate(); } });
+function raceUpdate(){
+  const t = R.t, xA = posAt(raceSA,t), xB = posAt(raceSB,t);
+  rPlot.set(rView, {
+    axisNames:['t','v'],
+    fills: R.fill ? [{ top:s=>vAt(VA,s), bot:s=>vAt(VB,s), L:0, R:t, pos:COL.Afill, neg:COL.Bfill }] : [],
+    vlines:[{ x:t, color:alpha(COL.ink2, .55), solid:true, width:2 }],   // 지금 시각(로봇 A의 복숭아색과 겹치지 않게 회색)
+    curves:[{ fn:s=>vAt(VA,s), color:COL.A, width:3.2, from:0, to:4, label:'vA(t)', labelColor:COL.AInk }, { fn:s=>vAt(VB,s), color:COL.B, width:3.2, from:0, to:4, label:'vB(t)', labelColor:COL.BInk }],
+    points:[0,1,2,3,4].flatMap(k=>[{x:k,y:vAt(VA,k),color:COL.A,r:4.5},{x:k,y:vAt(VB,k),color:COL.B,r:4.5}])
+  });
+  $('t2ru').textContent = unitText(rView) + ' · t: 분, v: m/분';
+  rTrack.set({ xMin:0, xMax:500, label:'위치 (m)', flags:[{ x:0, text:'출발' }],
+    robots:[{ x:xA, color:COL.A, dir:1, label:'A', sub:f2(xA)+' m', labelColor:COL.AInk }, { x:xB, color:COL.B, dir:1, label:'B', sub:f2(xB)+' m', labelColor:COL.BInk }] });
+  const gap = xA - xB;
+  $('t2rstat').innerHTML = `t = <b class="mono">${f2(t)}</b>분 · ` + (t < 1e-9 ? '출발선에 나란히 있어요.' : Math.abs(gap) < 0.5 ? '두 로봇이 거의 나란히 있어요!' : `지금은 <b style="color:${gap>0?COL.AInk:COL.BInk}">${gap>0?'A':'B'}</b>가 앞서 있어요.`);
+}
+function raceStop(){ if (R.stop){ R.stop(); R.stop = null; } $('t2rplay').textContent = '▶ 경주 시작'; }
+$('t2rplay').onclick = ()=>{
+  if (R.stop){ raceStop(); return; }
+  if (R.t >= 4-1e-9) R.t = 0;
+  $('t2rplay').textContent = '⏸ 멈춤';
+  R.stop = animate(R.t, 4, (4-R.t)/4*8000, t=>{ R.t = t; rtS.sync(); raceUpdate(); }, ()=>{ R.stop = null; $('t2rplay').textContent = '▶ 경주 시작'; });
+};
+$('t2rreset').onclick = ()=>{ raceStop(); R.t = 0; rtS.sync(); raceUpdate(); };
+$('t2rfill').onchange = e=>{ R.fill = e.target.checked; raceUpdate(); };
+const RV = {
+  1: 'vA(t) = 50t,  vB(t) = (50/3)t² + (50/3)t',
+  2: `A: ${frac(measure(VA,0,2).O)} m,  B: ${frac(measure(VB,0,2).O)} m (≈ ${f2(measure(VB,0,2).O)} m)`,
+  4: `있다. t = 3 (분)일 때 두 로봇이 같은 지점(출발점에서 ${frac(posAt(raceSA,3))} m)에 있다.`
+};
+document.querySelectorAll('[data-rv]').forEach(b=>b.onclick=()=>{ const el = $('rv'+b.dataset.rv); el.textContent = RV[b.dataset.rv]; el.classList.remove('hidden'); b.classList.add('hidden'); });
+
+/* =========================================================
+   3. 내가 만든 예 — 점 끌기 꺾은선
+   ========================================================= */
+const VMAX = 4, TEND = 8, GOAL = 16;
+const T3 = { v: (Array.isArray(STORED.pts) && STORED.pts.length===9) ? STORED.pts : [0,0,0,0,0,0,0,0,0],
+  saved: Array.isArray(STORED.saved) ? STORED.saved : [], drag:null, runT:null, stop:null };
+const t3Plot = new Plot('t3c'), t3Track = new Track('t3tr');
+const t3View = { xMin:0, xMax:8, yMin:-5, yMax:5, xu:0.5, yu:1 };
+const t3Sc = () => ({ V: makePL(T3.v.map((v,i)=>[i,v])), x0:0 });
+function t3Update(){
+  const sc = t3Sc(), m = measure(sc.V,0,TEND);
+  $('t3P').innerHTML = fracHTML(m.P,'m'); $('t3N').innerHTML = fracHTML(m.N,'m');
+  $('t3D').innerHTML = fracHTML(m.D,'m'); $('t3O').innerHTML = fracHTML(m.O,'m');
+  const st = $('t3stat'), zero = Math.abs(m.D) < 1e-9;
+  if (m.O < 1e-9){ st.className='status'; st.textContent='아직 움직이지 않았어요. 점을 위아래로 끌어 보세요.'; }
+  else if (!zero){ st.className='status warn'; st.textContent=`출발점보다 ${frac(Math.abs(m.D))} m ${m.D>0?'앞':'뒤'}에서 멈췄어요. 위치의 변화량을 0으로 만들어 보세요.`; }
+  else if (m.O < GOAL - 1e-9){ st.className='status'; st.innerHTML=`출발점으로 돌아왔어요! 이제 움직인 거리를 <b>${GOAL} m 이상</b>으로 늘려 보세요.`; }
+  else { st.className='status good'; st.innerHTML=`미션 성공! 출발점으로 돌아왔고 <b>${frac(m.O)} m</b>를 달렸어요. 더 길게 달릴 수도 있을까요?`; }
+  $('t3save').disabled = !(zero && m.O >= GOAL - 1e-9);
+  const tNow = T3.runT ?? TEND;
+  t3Plot.set(t3View, {
+    axisNames:['t','v'],
+    fills:[{ top:s=>vAt(sc.V,s), bot:()=>0, L:0, R:TEND, pos:COL.pos, neg:COL.neg, signs:true }],
+    hlines:[{ y:VMAX, color:COL.label }, { y:-VMAX, color:COL.label }],   // [2단계] 최고 속력 ±4를 화면에 표시
+    vlines: T3.runT!=null ? [{ x:tNow, color:COL.point, solid:true, width:2 }] : [],
+    curves:[{ fn:s=>vAt(sc.V,s), color:COL.v, width:3.2, from:0, to:TEND }],
+    points: T3.v.map((v,i)=>{
+      const fixed = i===0 || i===TEND, act = T3.drag===i;
+      // [2단계] 끄는 점 = 흰 채움 + --pz-point 굵은 테두리, 고정점 = 회색 채운 점
+      return fixed ? { x:i, y:v, color:COL.orig, r:5.5 } : { x:i, y:v, fill:'#fff', ringColor:COL.point, ring: act?4.5:3.5, r: act?11:9, color:COL.point, textColor:COL.ink, text: act ? fnum(v) : '' };
+    })
+  });
+  $('t3u').textContent = unitText(t3View);
+  const xs = [0]; for (let i=0;i<=80;i++) xs.push(posAt(sc, TEND*i/80));
+  const lo = Math.min(...xs, -2), hi = Math.max(...xs, 2);
+  t3Track.set({ xMin:Math.floor(lo-1), xMax:Math.ceil(hi+1), label:'위치 (m)', flags:[{ x:0, text:'출발점' }],
+    segs: route(sc, 0, tNow), robots:[{ x:posAt(sc,tNow), color:COL.robot, dir:Math.sign(r3(vAt(sc.V,tNow))) }] });
+  const ok = zero && m.O >= GOAL - 1e-9;   // [2단계] 미션 첫 성공 때 한 번만 축하 (불러온 저장값으로는 축하하지 않음)
+  if (ok && t3Update.ready && !t3Update.done) cheer('미션', '🎉 미션 성공! 출발점으로 돌아오는 로봇 완성');
+  t3Update.done = ok;
+}
+(function bindDrag(){
+  const c = $('t3c');
+  // [2단계] 글자 크기(CSS zoom)에서도 손가락 위치에 붙도록 화면 px → 캔버스 CSS px로 나눈다
+  const pick = e => { const r = c.getBoundingClientRect(), k = (c.clientWidth > 0 && r.width > 0) ? r.width / c.clientWidth : 1; return { px:(e.clientX-r.left)/k, py:(e.clientY-r.top)/k }; };
+  const setV = (i, py) => { const d = t3Plot.toData(0, py); let v = Math.round(d.y*2)/2; v = Math.max(-VMAX, Math.min(VMAX, v)); if (T3.v[i] !== v){ T3.v[i] = v; } };
+  c.addEventListener('pointerdown', e=>{
+    const { px, py } = pick(e), d = t3Plot.toData(px, py); if (!d) return;
+    const i = Math.round(d.x); if (i < 1 || i > TEND-1) return;
+    if (Math.abs(t3Plot.m.X(i) - px) > 34) return;
+    t3Stop(); T3.drag = i; c.setPointerCapture(e.pointerId); setV(i, py); t3Update(); e.preventDefault();
+  });
+  c.addEventListener('pointermove', e=>{ if (T3.drag==null) return; setV(T3.drag, pick(e).py); t3Update(); e.preventDefault(); });
+  const end = ()=>{ if (T3.drag==null) return; T3.drag = null; t3Update(); saveAll(); };
+  c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+})();
+function t3Stop(){ if (T3.stop){ T3.stop(); T3.stop = null; } T3.runT = null; $('t3play').textContent = '▶ 달려 보기'; }
+$('t3play').onclick = ()=>{
+  if (T3.stop){ t3Stop(); t3Update(); return; }
+  $('t3play').textContent = '⏸ 멈춤';
+  T3.stop = animate(0, TEND, 7000, t=>{ T3.runT = t; t3Update(); }, ()=>{ T3.stop = null; T3.runT = null; $('t3play').textContent = '▶ 달려 보기'; t3Update(); });
+};
+$('t3zero').onclick = ()=>{ t3Stop(); T3.v = [0,0,0,0,0,0,0,0,0]; t3Update(); saveAll(); };
+$('t3story').addEventListener('input', ()=>{ $('t3cnt').textContent = `${$('t3story').value.length} / 80`; });
+$('t3save').onclick = ()=>{
+  const story = $('t3story').value.trim(), m = measure(t3Sc().V,0,TEND);
+  if (story.length < 5){ $('t3msg').textContent = '이 운동에 어울리는 이야기를 한 줄 써 주세요.'; return; }
+  if (T3.saved.some(s=>s.v.join()===T3.v.join())){ $('t3msg').textContent = '이미 저장한 그래프예요. 모양을 바꿔 보세요.'; return; }
+  if (T3.saved.length >= 3){ $('t3msg').textContent = '3개까지 저장할 수 있어요. 하나를 지운 뒤 저장하세요.'; return; }
+  T3.saved.push({ v:[...T3.v], story, O:m.O, P:m.P });
+  $('t3story').value = ''; $('t3cnt').textContent = '0 / 80'; $('t3msg').textContent = '';
+  t3Saved(); saveAll(); toast('저장했어요');
+};
+function miniSVG(v){
+  const W = 120, H = 56, X = i => 6 + i*(W-12)/8, Y = y => H/2 - y*(H/2-6)/VMAX;
+  const pts = v.map((y,i)=>`${X(i)},${Y(y)}`).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}"><line x1="4" y1="${H/2}" x2="${W-4}" y2="${H/2}" stroke="${COL.axis}" stroke-width="1"/><polyline points="${pts}" fill="none" stroke="${COL.v}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+function t3Saved(){
+  $('t3sCnt').textContent = `${T3.saved.length} / 3`;
+  if (!T3.saved.length){ $('t3saved').innerHTML = '<p class="hint">아직 저장한 예가 없어요.</p>'; return; }
+  $('t3saved').innerHTML = T3.saved.map((s,i)=>`
+    <div class="savedItem">${miniSVG(s.v)}
+      <div><b>예 ${i+1}</b> · 움직인 거리 <span class="mono">${frac(s.O)} m</span><div>${esc(s.story)}</div>
+        <div class="row"><button class="btn small soft pz-btn pz-btn-soft" data-load="${i}">불러오기</button><button class="btn small pz-btn pz-btn-ghost" data-del="${i}">지우기</button></div></div>
+    </div>`).join('');
+  $('t3saved').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{ T3.saved.splice(+b.dataset.del,1); t3Saved(); saveAll(); });
+  $('t3saved').querySelectorAll('[data-load]').forEach(b=>b.onclick=()=>{ t3Stop(); T3.v = [...T3.saved[+b.dataset.load].v]; t3Update(); });
+}
+
+/* =========================================================
+   4. 열린 질문
+   ========================================================= */
+const T4 = { sit:'', pick:'', answers: Array.isArray(STORED.answers) ? STORED.answers : [] };
+const SITS = ['택시 요금','스마트워치 운동 기록','엘리베이터','배달 로봇의 배터리'];
+$('t4sit').innerHTML = SITS.map(s=>`<button class="chip" data-s="${s}">${s}</button>`).join('');
+$('t4sit').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{ T4.sit = b.dataset.s; $('t4sitTxt').value = b.dataset.s; t4Chips(); });
+$('t4sitTxt').addEventListener('input', ()=>{ T4.sit = $('t4sitTxt').value.trim(); t4Chips(); });
+function t4Chips(){ $('t4sit').querySelectorAll('.chip').forEach(b=>b.classList.toggle('on', b.dataset.s===T4.sit)); }
+document.querySelectorAll('#t4pick button').forEach(b=>b.onclick=()=>{ T4.pick = b.dataset.p; document.querySelectorAll('#t4pick button').forEach(x=>x.classList.toggle('on', x===b)); });
+$('t4why').addEventListener('input', ()=>{ $('t4cnt').textContent = `${$('t4why').value.length} / 200`; });
+$('t4save').onclick = ()=>{
+  const sit = $('t4sitTxt').value.trim(), why = $('t4why').value.trim();
+  if (!sit){ toast('상황을 고르거나 써 주세요'); return; }
+  if (!T4.pick){ toast('무엇을 재야 할지 골라 주세요'); return; }
+  if (why.length < 10){ toast('이유를 1~2문장으로 써 주세요'); return; }
+  T4.answers.push({ sit, pick:T4.pick, why });
+  $('t4why').value = ''; $('t4cnt').textContent = '0 / 200'; t4List(); saveAll(); toast('저장했어요');
+};
+function t4List(){
+  $('t4list').innerHTML = T4.answers.map((a,i)=>`<div class="ansCard"><button class="x" data-i="${i}" aria-label="지우기">×</button><span class="tag">${esc(a.sit)}</span><b>${esc(a.pick)}</b><div style="margin-top:4px">${esc(a.why)}</div></div>`).join('');
+  $('t4list').querySelectorAll('.x').forEach(b=>b.onclick=()=>{ T4.answers.splice(+b.dataset.i,1); t4List(); saveAll(); });
+}
+if (STORED.nick) $('nick').value = STORED.nick;
+$('nick').addEventListener('change', saveAll);
+function buildRecord(){
+  const L = [`[로봇 경주 활동 기록] ${$('nick').value.trim() || '(이름 없음)'}`, '', '1. 관찰'];
+  if (T1.rows.length) T1.rows.forEach(r=>L.push(`  - ${r.sc} t=${fnum(r.t)}: 위치 ${r.x}, 위치의 변화량 ${r.d}, 움직인 거리 ${r.o}`)); else L.push('  - 기록 없음');
+  L.push('', '3. 내가 만든 예 — 출발점으로 돌아오는 로봇');
+  if (T3.saved.length) T3.saved.forEach((s,i)=>L.push(`  - 예 ${i+1}: 1~7분 속도 [${s.v.slice(1,8).map(fnum).join(', ')}] m/분, 움직인 거리 ${frac(s.O)} m — ${s.story}`)); else L.push('  - 저장한 예 없음');
+  L.push('', '4. 열린 질문 — 생활 속 위치의 변화량과 움직인 거리');
+  if (T4.answers.length) T4.answers.forEach(a=>L.push(`  - [${a.sit}] ${a.pick}: ${a.why}`)); else L.push('  - 답 없음');
+  return L.join('\n');
+}
+$('recShow').onclick = ()=>{ const p=$('recPrev'); p.textContent = buildRecord(); p.classList.toggle('hidden'); };
+$('recCopy').onclick = ()=>{
+  const text = buildRecord(); $('recPrev').textContent = text; $('recPrev').classList.remove('hidden');
+  const fallback = ()=>{ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); toast('복사했어요'); }catch(e){ toast('아래 기록을 길게 눌러 복사하세요'); } ta.remove(); };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(()=>toast('복사했어요'), fallback); else fallback();
+};
+
+/* [2단계] 그래프 크기: 1100px 이상(스플릿)에서는 그래프 열이 '상단 바 아래 남은 높이'(--pz-avail-h, 글자 크기 배율 반영)에
+   다 들어가도록 각 그래프의 최대 높이를 나눠 주고, 다 들어가면 그래프 열을 sticky로 고정한다.
+   1099px 이하(한 줄)에서는 그래프 하나가 화면 높이의 62%를 넘지 않게. 한 칸이 정사각형인 것은 그대로. */
+const SPLIT_MQ = window.matchMedia('(min-width: 1100px)');
+function availH(){ const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pz-avail-h')); return v > 0 ? v : (window.innerHeight - 64); }
+const shown = el => !!(el && el.offsetParent !== null);
+function fitGraphs(){
+  const avail = availH(), split = SPLIT_MQ.matches;
+  document.querySelectorAll('.view.active .layout').forEach(lay=>{
+    if (!shown(lay)) return;
+    const gc = lay.querySelector('.graphCol'); if (!gc) return;
+    const ps = PLOTS.filter(p=>gc.contains(p.c) && shown(p.c));
+    if (!split){ ps.forEach(p=>{ p.maxH = Math.max(240, avail*0.62); p.render(); }); gc.classList.remove('stick'); return; }
+    const chrome = gc.offsetHeight - ps.reduce((s,p)=>s + p.c.offsetHeight, 0);
+    // 처음 화면(스크롤 0)에서도 그래프 열 아래 끝이 보이게: 열의 위치(상단 바 아래 CSS px)만큼 뺀다(최대 45%)
+    const k = cssScale(gc), bar = (document.querySelector('.pz-topbar') || {offsetHeight:64}).offsetHeight;
+    const top0 = (gc.getBoundingClientRect().top + window.scrollY - bar) / k;
+    const wsum = ps.reduce((s,p)=>s + p.w, 0) || 1, minW = Math.min(...ps.map(p=>p.w));
+    let budget = Math.min(avail - 28 - chrome, avail - Math.min(Math.max(0, top0), avail*0.45) - chrome - 20);
+    // 그래프가 둘인 탭에서 처음 화면에 맞추면 너무 작아질 때(260px 미만)는 sticky 상태에 맞춘다(조금 내리면 고정됨)
+    if (budget*minW/wsum < 260) budget = avail - 28 - chrome;
+    ps.forEach(p=>{ p.maxH = Math.max(220, budget*p.w/wsum); p.render(); });
+    gc.classList.toggle('stick', gc.offsetHeight <= avail - 16);
+  });
+}
+window.addEventListener('resize', ()=>requestAnimationFrame(fitGraphs));
+
+/* =========================================================
+   탭 전환 & 시작
+   ========================================================= */
+document.querySelectorAll('.tabBtn').forEach(b=>b.onclick=()=>{
+  // [1단계 수정] 다른 탭으로 옮기면 재생 중인 애니메이션을 멈춤 (이전: 1번 탭 재생이 계속되어 다른 탭에서 ‘방향을 바꿨어요’ 알림이 뜸)
+  if (!b.classList.contains('active')){ t1Stop(); t2Stop(); raceStop(); t3Stop(); }
+  document.querySelectorAll('.tabBtn').forEach(x=>{ x.classList.toggle('active', x===b); x.setAttribute('aria-selected', String(x===b)); });
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id===b.dataset.tab));
+  const id = b.dataset.tab;
+  if (window.PastelUI) PastelUI.fade($(id));   // [2단계] 새 패널을 부드럽게
+  if (id==='t1') t1Update();
+  if (id==='t2'){ if ($('t2race').classList.contains('hidden')) t2Update(); else raceUpdate(); }
+  if (id==='t3') t3Update();
+  requestAnimationFrame(fitGraphs);
+  window.scrollTo({ top:0, behavior:'smooth' });
+});
+t1Select('balloon'); t1Table();
+t2Select('ex1');
+t3Update(); t3Saved();
+t4List();
+t1Table.ready = true; t3Update.ready = true;   // [2단계] 저장된 기록을 불러올 때는 축하하지 않음
+requestAnimationFrame(fitGraphs);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(()=>requestAnimationFrame(fitGraphs));
+</script>
+</body>
+</html>

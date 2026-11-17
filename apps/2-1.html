@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>함수의 미분계수 시뮬레이터</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+  <style>
+    /* [2단계 디자인] 공통 테마(복숭아 하늘) 적용. 글꼴·바탕은 테마(PZ 블록)가 정한다. 시범 앱 2-4-1과 같은 카드·알약 언어. */
+    :root{
+      --panel:var(--pz-panel);
+      --ink:var(--pz-ink);
+      --muted:var(--pz-muted);
+      --line:var(--pz-line);
+      --curveF:var(--pz-f);
+      --secant:var(--pz-butter-line); --secantInk:var(--pz-butter-ink);
+      --tangent:var(--pz-ref);        --tangentInk:var(--pz-accent-ink);
+      --helper:var(--pz-lav-line);    --helperInk:var(--pz-lav-ink);
+      --chartH:460px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0}
+
+    /* 한 줄 소개 + 단계 탭 */
+    .step-nav{margin-bottom:16px}
+    .step-btn{white-space:nowrap}
+
+    /* ===== 배치: 1099px 이하 = [단계 → 그래프 → 조작] 한 줄,
+             1100px 이상 = 왼쪽 [단계·조작] + 오른쪽 그래프(sticky) ===== */
+    .main{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+    .main > *{min-width:0;margin:0}
+    @media (min-width:1100px){
+      .main{
+        grid-template-columns:minmax(360px,1fr) minmax(0,1.35fr);
+        grid-template-rows:auto auto 1fr;
+        grid-template-areas:"stage graph" "ctrl graph" ". graph";
+        column-gap:20px;align-items:start;
+      }
+      .aStage{grid-area:stage} .aCtrl{grid-area:ctrl}
+      .aGraph{grid-area:graph;align-self:start}
+    }
+
+    /* 카드 */
+    .card{background:var(--pz-panel);border:2px solid var(--pz-line);border-radius:var(--pz-r-lg);box-shadow:var(--pz-shadow);padding:18px 20px}
+    .cardTitle{font-family:var(--pz-font-title);font-weight:400;font-size:19px;color:var(--pz-ink);margin:0}
+
+    /* 단계 카드 */
+    .stage-kicker{display:inline-block;font-size:14px;font-weight:700;color:var(--pz-accent-ink);background:var(--pz-accent-soft);padding:5px 12px;border-radius:var(--pz-r-pill)}
+    .stage-card h2{font-family:var(--pz-font-title);font-weight:400;font-size:25px;margin:10px 0 6px;color:var(--pz-ink)}
+    .stage-card p{margin:0;color:var(--pz-ink2);font-size:15.5px;line-height:1.65}
+    .formula{margin-top:14px;background:var(--pz-soft);border-radius:var(--pz-r-md);padding:14px 16px;
+      font-family:var(--pz-font-math);font-size:24px;text-align:center;line-height:1.5;color:var(--pz-ink);overflow-x:auto}
+    .formula .kr{font-family:var(--pz-font);font-size:18px;font-weight:700}
+    /* [수식] 교과서식 수식은 KaTeX로 (1-3과 같은 방식) */
+    .katex{font-size:1.1em;white-space:nowrap}
+    .calc .calcLine{padding:2px 0}
+    .navRow{display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap}
+    .progress{flex:1;min-width:80px;height:10px;border-radius:var(--pz-r-pill);background:var(--pz-line);overflow:hidden}
+    .progress > div{height:100%;background:var(--pz-accent);border-radius:var(--pz-r-pill);transition:width .25s ease}
+
+    /* 조작 카드 */
+    .controls-card{display:flex;flex-direction:column;gap:14px}
+    .controls-title p{margin:4px 0 0;color:var(--pz-muted);font-size:15px;line-height:1.55}
+    .stage-hidden{display:none !important}
+    .stage-disabled{opacity:.48;pointer-events:none;filter:grayscale(.25)}
+    .control-block{background:var(--pz-soft);border-radius:var(--pz-r-md);padding:12px 14px}
+    .control-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;font-size:15.5px;font-weight:700;color:var(--pz-ink2)}
+    .value-badge{background:var(--pz-panel);color:var(--pz-accent-ink);padding:4px 11px;border-radius:var(--pz-r-pill);font-size:15px;font-weight:800;
+      font-family:var(--pz-mono);box-shadow:0 0 0 2px var(--pz-line) inset;white-space:nowrap}
+    .control-block input[type=range]{width:100%;display:block;margin:8px 0}
+    .control-block input[type=range]:disabled{opacity:.45;cursor:not-allowed}
+    .button-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .btnSm{padding:9px 14px;font-size:15px}
+    .toggle-row{display:flex;flex-wrap:wrap;gap:8px}
+    .toggle{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:2px solid var(--pz-line);border-radius:var(--pz-r-pill);
+      background:var(--pz-panel);color:var(--pz-ink2);font-weight:700;font-size:15px;cursor:pointer}
+    .toggle:has(input:checked){background:var(--pz-accent-soft);border-color:var(--pz-accent);color:var(--pz-accent-ink)}
+    .toggle input{accent-color:var(--pz-accent-btn);width:17px;height:17px;margin:0}
+    .metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .metric{background:var(--pz-soft);border-radius:var(--pz-r-md);padding:10px 14px}
+    .metric .label{color:var(--pz-muted);font-size:14px;font-weight:700}
+    .metric .num{margin-top:2px;font-size:20px;font-weight:800;font-family:var(--pz-mono);color:var(--pz-ink);overflow-wrap:anywhere}
+    #metricSec .label,#metricSec .num{color:var(--secantInk)}
+    #metricDer .label,#metricDer .num{color:var(--tangentInk)}
+    #metricSec{box-shadow:inset 4px 0 0 var(--secant)}
+    #metricDer{box-shadow:inset 4px 0 0 var(--tangent)}
+    .calc{padding:12px 16px;border-radius:var(--pz-r-md);background:var(--pz-panel);color:var(--pz-ink);box-shadow:0 0 0 2px var(--pz-line) inset;
+      font-family:var(--pz-font-math);line-height:1.7;font-size:19px;display:none;overflow:auto}
+    .calc.show{display:block}
+    .notice{font-size:14px;color:var(--pz-muted);margin-top:8px}
+
+    /* 그래프 카드 */
+    .graph-card{padding:14px 16px 12px}
+    .graph-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+    .fnChips{display:flex;flex-wrap:wrap;gap:6px}
+    .fnChips .pz-chip{font-family:var(--pz-font-math);font-size:16px;font-style:italic;padding:6px 13px}
+    .fnName{font-size:14px;color:var(--pz-muted)}
+    select{font:600 15px/1.2 var(--pz-font);border:2px solid var(--pz-line);border-radius:var(--pz-r-pill);padding:8px 14px;
+      background:var(--pz-panel);color:var(--pz-ink2);cursor:pointer}
+    select:disabled{opacity:.5;cursor:not-allowed}
+    .canvas-wrap{position:relative;height:var(--chartH)}
+    /* 주의: 맨 canvas 선택자는 테마의 축하(컨페티) 캔버스까지 덮으므로 그래프 카드 안으로 한정 */
+    .graph-card canvas{width:100%;height:100%;display:block;border-radius:var(--pz-r-md);background:var(--pz-panel)}
+    .graphFoot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px;color:var(--pz-ink2);font-weight:600}
+    .legend span{display:inline-flex;align-items:center;gap:6px}
+    .sw{display:inline-block;width:22px;height:0;border-top:4px solid;border-radius:var(--pz-r-pill)}
+    .sw.dash{border-top-style:dashed}
+    .pt{display:inline-block;width:13px;height:13px;border-radius:50%;background:var(--pz-panel);border:3.5px solid var(--pz-point)}
+    .viewBtns{display:flex;gap:6px;flex-wrap:wrap}
+    @media (max-width:520px){.metrics{grid-template-columns:1fr}}
+  </style>
+<!-- PZ:HEAD -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../shared/theme.css">
+<script type="application/json" id="pz-meta">{"slug": "2-1", "unit": "2-1", "title": "미분계수의 정의", "group": null, "home": "../index.html", "guide": "../guides/2-1.html"}</script>
+<script id="pz-ui" src="../shared/ui.js"></script>
+<!-- /PZ:HEAD -->
+</head>
+<body>
+<div class="app pz-wrap">
+  <!-- [2단계] 상단 바가 단원·제목을 보여 주므로 앱 제목(h1)은 지우고 한 줄 소개만 남김 -->
+  <p class="desc pz-desc"><span class="pz-term" data-tip="할선">할선</span>의 기울기가 <span class="pz-term" data-tip="접선">접선</span>의 기울기에 가까워지는 과정을 관찰해 보세요.</p>
+  <div class="step-nav pz-tabs" id="stepNav" role="tablist" aria-label="단계"></div>
+
+  <div class="main">
+    <section class="card stage-card aStage">
+      <div class="stage-kicker" id="stageKicker"></div>
+      <h2 id="stageTitle"></h2>
+      <p id="stageText"></p>
+      <div class="formula" id="formula"></div>
+      <div class="navRow">
+        <button id="prevBtn" class="pz-btn pz-btn-ghost btnSm">← 이전</button>
+        <div class="progress" aria-hidden="true"><div id="progressBar"></div></div>
+        <button id="restartBtn" class="pz-btn pz-btn-soft btnSm">↺ 처음부터</button>
+        <button id="nextBtn" class="pz-btn pz-btn-primary btnSm">다음 →</button>
+      </div>
+    </section>
+
+    <section class="card graph-card aGraph pz-sticky">
+      <div class="graph-toolbar">
+        <div class="fnChips" id="fnChips" role="group" aria-label="함수 선택"></div>
+        <div class="toolbar-group" id="helperGroup">
+          <select id="helperMode" aria-label="보조선 선택">
+            <option value="none">보조선 없음</option>
+            <option value="triangle">기울기 삼각형</option>
+            <option value="projection">축 투영선까지</option>
+          </select>
+        </div>
+      </div>
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="graph" aria-label="곡선 y=f(x)와 점 P, Q, 할선·접선 그래프"></canvas>
+      </div>
+      <div class="graphFoot">
+        <div class="legend">
+          <span><i class="sw" style="border-color:var(--curveF)"></i>y = f(x)</span>
+          <span><i class="sw" style="border-color:var(--secant)"></i>할선 PQ</span>
+          <span><i class="sw dash" style="border-color:var(--tangent)"></i>접선</span>
+          <span><i class="pt"></i>P 고정점 · Q 이동점</span>
+        </div>
+        <div class="viewBtns">
+          <button id="zoomIn" class="pz-btn pz-btn-ghost btnSm">＋ 확대</button>
+          <button id="zoomOut" class="pz-btn pz-btn-ghost btnSm">－ 축소</button>
+          <button id="resetView" class="pz-btn pz-btn-ghost btnSm">↺ 원래 보기</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card controls-card aCtrl">
+      <div class="controls-title">
+        <h3 class="cardTitle" id="controlsTitle">현재 단계 조작</h3>
+        <p id="controlsGuide">이 단계에서 필요한 조작만 표시됩니다.</p>
+      </div>
+
+      <div class="control-block" id="aControl">
+        <div class="control-head">
+          <span>고정점의 x좌표, a</span>
+          <span class="value-badge" id="aValue"></span>
+        </div>
+        <input id="aSlider" type="range" min="-3" max="3" step="0.1" value="1" />
+        <div class="button-row">
+          <button id="lockBtn" class="pz-btn pz-btn-soft btnSm">고정점 잠금: 켜짐</button>
+        </div>
+      </div>
+
+      <div class="control-block" id="hControl">
+        <div class="control-head">
+          <span>두 점 사이의 간격, h</span>
+          <span class="value-badge" id="hValue"></span>
+        </div>
+        <input id="hSlider" type="range" min="0.01" max="3" step="0.01" value="2" />
+        <div class="button-row" id="hActionButtons">
+          <button id="halfBtn" class="pz-btn pz-btn-ghost btnSm">1/2로 줄이기</button>
+          <button id="tenthBtn" class="pz-btn pz-btn-ghost btnSm">1/10로 줄이기</button>
+          <button id="autoBtn" class="pz-btn pz-btn-primary btnSm">▶ 자동 접근</button>
+          <button id="pauseBtn" class="pz-btn pz-btn-soft btnSm">❚❚ 일시 정지</button>
+          <button id="resetHBtn" class="pz-btn pz-btn-ghost btnSm">↺ 처음 값으로</button>
+        </div>
+        <div class="notice" id="hNotice">단계 수업에서는 h&gt;0으로 접근합니다.</div>
+      </div>
+
+      <div class="toggle-row" id="detailControls">
+        <label class="toggle"><input type="checkbox" id="calcToggle" /> 계산 과정 보기</label>
+        <label class="toggle"><input type="checkbox" id="exactToggle" /> 정확한 값 보기</label>
+      </div>
+
+      <div class="metrics" id="metricsPanel">
+        <div class="metric" id="metricFa"><div class="label">f(a)</div><div class="num" id="faMetric"></div></div>
+        <div class="metric" id="metricFah"><div class="label">f(a+h)</div><div class="num" id="fahMetric"></div></div>
+        <div class="metric" id="metricSec"><div class="label"><span class="pz-term" data-tip="할선">할선</span>의 기울기</div><div class="num" id="secMetric"></div></div>
+        <div class="metric" id="metricDer"><div class="label"><span class="pz-term" data-tip="미분계수">미분계수</span> f′(a)</div><div class="num" id="derMetric"></div></div>
+      </div>
+
+      <div class="calc" id="calcBox"></div>
+    </section>
+  </div>
+</div>
+<script>
+(() => {
+  const funcs = [
+    {name:"x² — 기본 예제", expr:"x²", f:x=>x*x, df:x=>2*x, range:{xMin:-4,xMax:4,yMin:-3,yMax:10}},
+    {name:"x²−2x — 기울기 부호 변화", expr:"x²−2x", f:x=>x*x-2*x, df:x=>2*x-2, range:{xMin:-3,xMax:5,yMin:-4,yMax:10}},
+    {name:"x³ — 곡선 형태 비교", expr:"x³", f:x=>x*x*x, df:x=>3*x*x, range:{xMin:-2.5,xMax:2.5,yMin:-10,yMax:10}},
+    {name:"x³−3x — 다양한 기울기", expr:"x³−3x", f:x=>x*x*x-3*x, df:x=>3*x*x-3, range:{xMin:-3,xMax:3,yMin:-8,yMax:8}},
+    {name:"−x²+4 — 아래로 열린 포물선", expr:"−x²+4", f:x=>-x*x+4, df:x=>-2*x, range:{xMin:-4,xMax:4,yMin:-8,yMax:6}},
+    {name:"½x²+x−1 — 계수 변화", expr:"½x²+x−1", f:x=>0.5*x*x+x-1, df:x=>x+1, range:{xMin:-5,xMax:4,yMin:-5,yMax:10}}
+  ];
+
+  const stages = [
+    {title:"고정점 P", text:"그래프 위의 한 점 P를 정합니다. 이 점의 x좌표가 a입니다.", formula:"P(a, f(a))"},
+    {title:"이동점 Q", text:"점 P에서 가로로 h만큼 떨어진 곳에 점 Q를 잡습니다.", formula:"Q(a+h, f(a+h))"},
+    {title:"할선과 평균변화율", text:"두 점 P와 Q를 지나는 직선의 기울기는 구간에서의 평균변화율입니다.", formula:"[f(a+h)−f(a)] / h"},
+    {title:"Q가 P에 접근", text:"h를 점점 작게 하면 Q가 P에 가까워지고, 할선의 방향도 계속 변합니다.", formula:"h → 0"},
+    {title:"미분계수", text:"할선의 기울기가 가까워지는 값이 x=a에서의 미분계수입니다.", formula:"f′(a)=lim(h→0) [f(a+h)−f(a)] / h"},
+    {title:"자유 탐색", text:"a와 h를 자유롭게 바꾸며 여러 다항함수에서 같은 현상을 탐색해 보세요.", formula:"할선의 기울기 → 접선의 기울기"}
+  ];
+  /* [수식] KaTeX로 식을 그린다 (1-3과 같은 KaTeX 0.16.9. 못 불러오면 식 글자 그대로) */
+  const TX=(t,d=false)=>{ try{ return window.katex?katex.renderToString(t,{throwOnError:false,displayMode:d}):t; }catch(e){ return t; } };
+  /* [수식] 단계 수식을 교과서 표기(KaTeX)로 보여 준다. 내용은 위 formula 문자열과 같다. */
+  const formulaHTML = [
+    TX('P(a,\\ f(a))'),
+    TX('Q(a+h,\\ f(a+h))'),
+    TX('\\dfrac{f(a+h)-f(a)}{h}'),
+    TX('h\\to 0'),
+    TX('f\'(a)=\\displaystyle\\lim_{h\\to 0}\\frac{f(a+h)-f(a)}{h}'),
+    '<span class="kr">할선의 기울기 → 접선의 기울기</span>'
+  ];
+  /* [2단계] 설명 문장 속 용어(단계마다 처음 한 번)를 툴팁으로 감싼다 */
+  const TERMS=["평균변화율","미분계수","할선","접선"];
+  function termify(text){
+    const esc=String(text).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    const slots=[]; let s=esc;
+    TERMS.forEach(k=>{const i=s.indexOf(k); if(i<0) return;
+      slots.push(`<span class="pz-term" data-tip="${k}" tabindex="0">${k}</span>`);
+      s=s.slice(0,i)+"\u0000"+(slots.length-1)+"\u0000"+s.slice(i+k.length);});
+    return s.replace(/\u0000(\d+)\u0000/g,(m,n)=>slots[+n]);
+  }
+
+  const el = id => document.getElementById(id);
+  const canvas = el("graph");
+  const ctx = canvas.getContext("2d");
+  const wrap = el("canvasWrap");
+
+  /* [2단계] 테마 색 읽기 (그래프 의미 색은 모두 --pz-* 토큰) */
+  const tokCache={}; // 색은 실행 중 바뀌지 않으므로 한 번 읽은 값을 기억(그리기 속도)
+  function tok(name){ return tokCache[name] || (tokCache[name]=tok0(name)); }
+  function tok0(name){
+    if (window.PastelUI) return PastelUI.color(name);
+    let v=getComputedStyle(document.documentElement).getPropertyValue(name).trim(),g=0;
+    while(/^var\(/.test(v)&&g++<6) v=getComputedStyle(document.documentElement).getPropertyValue(v.replace(/^var\(\s*|\s*\)$/g,'')).trim();
+    return v||'#888';
+  }
+  /* [2단계] 글자 크기(CSS zoom) 비율: 화면 px ÷ CSS px */
+  function cssScale(e){const r=e.getBoundingClientRect();return (e.clientWidth>0&&r.width>0)?r.width/e.clientWidth:1;}
+  const FONT='"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+  function haloText(text,x,y,color){
+    ctx.save();ctx.lineJoin='round';ctx.lineWidth=5;ctx.strokeStyle='rgba(255,255,255,0.95)';
+    ctx.strokeText(text,x,y);ctx.fillStyle=color;ctx.fillText(text,x,y);ctx.restore();
+  }
+
+  let funcIndex = 0;
+  let stage = 0;
+  let a = 1;
+  let h = 2;
+  let locked = true;
+  let autoTimer = null;
+  let view = {...funcs[0].range};
+  let tangentBlend = 0;
+  let animFrame = null;
+  let chartH = 0;
+
+  // [2단계] 함수 선택: 드롭다운 → 칩(.pz-chip). 칩 글자는 식, 설명은 title로.
+  funcs.forEach((f,i)=>{
+    const b=document.createElement("button");
+    b.type="button"; b.className="pz-chip"; b.dataset.fi=i;
+    b.textContent=f.expr; b.title=f.name;
+    b.setAttribute("aria-pressed", String(i===0));
+    b.onclick=()=>selectFunc(i);
+    el("fnChips").appendChild(b);
+  });
+
+  stages.forEach((s,i)=>{
+    const b=document.createElement("button");
+    b.className="step-btn pz-tab";
+    b.setAttribute("role","tab");
+    b.textContent=`${i+1}. ${s.title}`;
+    b.onclick=()=>setStage(i);
+    el("stepNav").appendChild(b);
+  });
+
+  function fmt(n, digits=3){
+    if (!Number.isFinite(n)) return "—";
+    const v=Math.abs(n)<1e-10?0:n;
+    return Number(v.toFixed(digits)).toString();
+  }
+  function fractionApprox(x, maxDen=40){
+    if (!Number.isFinite(x)) return null;
+    let best={n:Math.round(x),d:1,err:Math.abs(x-Math.round(x))};
+    for(let d=1;d<=maxDen;d++){
+      const n=Math.round(x*d), err=Math.abs(x-n/d);
+      if(err<best.err){best={n,d,err};}
+    }
+    if(best.err<1e-8 && best.d!==1){
+      const g=gcd(Math.abs(best.n),best.d);
+      return `${best.n/g}/${best.d/g}`;
+    }
+    return null;
+  }
+  function gcd(a,b){while(b){[a,b]=[b,a%b]}return a||1}
+  function exactText(x){
+    const fr=fractionApprox(x);
+    return fr ? `${fr} = ${fmt(x)}` : fmt(x);
+  }
+
+  /* [2단계] 그래프 높이: 1100px 이상(스플릿)에서는 그래프 카드가 처음 화면과 sticky 상태 모두에서 다 보이게,
+     1099px 이하에서는 폭의 62%·화면 높이의 58% 이하로. (100vh 대신 실제 화면 높이를 CSS px로 환산) */
+  const SPLIT_MQ = window.matchMedia('(min-width: 1100px)');
+  function fitChart(){
+    const card=wrap.closest('.graph-card');
+    if(!wrap.clientWidth) return;
+    const k=cssScale(wrap), cssW=wrap.clientWidth, vh=window.innerHeight/k;
+    let hh;
+    if(SPLIT_MQ.matches){
+      const cr=card.getBoundingClientRect(), wr=wrap.getBoundingClientRect();
+      const top0=(cr.top+window.scrollY)/k, chrome=(cr.height-wr.height)/k;
+      const bar=(document.querySelector('.pz-topbar')||{offsetHeight:64}).offsetHeight/k;
+      const fitFirst=vh-Math.min(top0,vh*0.45)-chrome-16;
+      const fitSticky=vh-bar-12/k-chrome-24;
+      hh=Math.max(300,Math.min(fitFirst,fitSticky,cssW*1.05));
+    }else{
+      hh=Math.max(280,Math.min(cssW*0.62,vh*0.58));
+    }
+    hh=Math.round(hh);
+    if(hh!==chartH){chartH=hh;document.documentElement.style.setProperty('--chartH',hh+'px');}
+  }
+
+  function resize(){
+    fitChart();
+    // [2단계] 글자 크기(zoom)만큼 화면에서 커지므로 해상도를 그만큼 올리고, 그리기 크기는 CSS px(clientWidth) 기준
+    const dpr=(window.devicePixelRatio||1)*cssScale(canvas);
+    const w=canvas.clientWidth, hc=canvas.clientHeight;
+    CW=w||1; CH=hc||1;
+    canvas.width=Math.max(1,Math.round(w*dpr));
+    canvas.height=Math.max(1,Math.round(hc*dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+
+  /* [2단계] 그리기 크기는 resize() 때만 잰다(그릴 때마다 clientWidth를 읽으면 레이아웃 계산이 강제돼 자동 접근이 느려짐) */
+  let CW=1,CH=1;
+  function X(x){return (x-view.xMin)/(view.xMax-view.xMin)*CW}
+  function Y(y){return CH-(y-view.yMin)/(view.yMax-view.yMin)*CH}
+
+  function niceStep(span){
+    const rough=span/10;
+    const p=Math.pow(10,Math.floor(Math.log10(rough)));
+    const n=rough/p;
+    return (n<1.5?1:n<3?2:n<7?5:10)*p;
+  }
+
+  function line(x1,y1,x2,y2,color,width=2,dash=[]){
+    ctx.save();
+    ctx.strokeStyle=color; ctx.lineWidth=width; ctx.setLineDash(dash); ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(X(x1),Y(y1));ctx.lineTo(X(x2),Y(y2));ctx.stroke();
+    ctx.restore();
+  }
+
+  /* [2단계] 점 = 흰 채움 + --pz-point 굵은 테두리, 이름은 15px 굵게 + 흰 테두리 글자 */
+  function point(x,y,label,dx=12,dy=-12){
+    ctx.save();
+    ctx.fillStyle='#fff'; ctx.strokeStyle=tok('--pz-point'); ctx.lineWidth=3.5;
+    ctx.beginPath();ctx.arc(X(x),Y(y),7,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.font="800 16px "+FONT; ctx.textAlign=dx<0?'right':'left'; ctx.textBaseline='middle';
+    haloText(label,X(x)+dx,Y(y)+dy,tok('--pz-ink'));
+    ctx.restore();
+  }
+
+  /* [2단계] 선 이름표: 보이는 영역 안쪽에서 가장 오른쪽 점 근처 (색+글자) */
+  const tagSpots=[]; let tagAvoid=[];
+  function tagFor(fn,text,color){
+    const w=CW,hc=CH; let at=null;
+    for(let i=0;i<=400;i++){
+      const x=view.xMin+(view.xMax-view.xMin)*i/400, py=Y(fn(x)), px=X(x);
+      // 점 P, Q 이름과 겹치지 않게 점 주변(44px)은 피한다
+      if(Number.isFinite(py)&&py>22&&py<hc-30&&px<w-8&&px>60&&!tagAvoid.some(q=>Math.hypot(q.x-px,q.y-py)<44)) at={px,py};
+    }
+    if(at) tagSpots.push({text,color,...at});
+  }
+  function drawTags(){
+    ctx.save(); ctx.font="700 15px "+FONT; ctx.textAlign='right'; ctx.textBaseline='alphabetic';
+    const placed=[], hc=CH;
+    tagSpots.forEach(s=>{
+      let y=s.py-10;
+      for(let g=0;g<6&&placed.some(p=>Math.abs(p.y-y)<18&&Math.abs(p.x-s.px)<110);g++) y+=(s.py>hc/2?-19:19);
+      y=Math.max(18,Math.min(hc-6,y));
+      placed.push({x:s.px,y}); haloText(s.text,s.px-6,y,s.color);
+    });
+    ctx.restore(); tagSpots.length=0;
+  }
+
+  function drawGrid(){
+    const w=CW,hc=CH;
+    ctx.clearRect(0,0,w,hc);
+    ctx.fillStyle=tok('--pz-panel');ctx.fillRect(0,0,w,hc);
+    const xs=niceStep(view.xMax-view.xMin), ys=niceStep(view.yMax-view.yMin);
+    const grid=tok('--pz-grid'), axis=tok('--pz-axis'), lab=tok('--pz-muted');
+    ctx.font="500 13px "+FONT;
+    // 눈금 숫자는 축 근처에 두되, 축이 화면 밖이면 가장자리에 붙인다
+    const yLab=Math.min(hc-18,Math.max(4,Y(0)+6)), xLab=Math.min(w-4,Math.max(34,X(0)-7));
+    ctx.textAlign="center";ctx.textBaseline="top";
+    for(let x=Math.ceil(view.xMin/xs)*xs;x<=view.xMax;x+=xs){
+      const px=X(x), zero=Math.abs(x)<1e-9;
+      ctx.strokeStyle=zero?axis:grid; ctx.lineWidth=zero?1.6:1;
+      ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,hc);ctx.stroke();
+      if(!zero&&px>12&&px<w-12){ctx.fillStyle=lab;ctx.fillText(fmt(x,2),px,yLab);}
+    }
+    ctx.textAlign="right";ctx.textBaseline="middle";
+    for(let y=Math.ceil(view.yMin/ys)*ys;y<=view.yMax;y+=ys){
+      const py=Y(y), zero=Math.abs(y)<1e-9;
+      ctx.strokeStyle=zero?axis:grid; ctx.lineWidth=zero?1.6:1;
+      ctx.beginPath();ctx.moveTo(0,py);ctx.lineTo(w,py);ctx.stroke();
+      if(!zero&&py>10&&py<hc-10){ctx.fillStyle=lab;ctx.fillText(fmt(y,2),xLab,py);}
+    }
+  }
+
+  function drawFunction(){
+    const f=funcs[funcIndex].f;
+    ctx.save();
+    ctx.strokeStyle=tok('--pz-f');
+    ctx.lineWidth=3.5; ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.beginPath();
+    let started=false;
+    const samples=Math.max(500,CW);
+    for(let i=0;i<=samples;i++){
+      const x=view.xMin+(view.xMax-view.xMin)*i/samples;
+      const y=f(x);
+      const px=X(x),py=Y(y);
+      if(!Number.isFinite(py)||Math.abs(py)>100000){started=false;continue}
+      if(!started){ctx.moveTo(px,py);started=true}else ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+    ctx.restore();
+    tagFor(f,"y = f(x)",tok('--pz-sky-ink'));
+  }
+
+  function drawHelpers(P,Q){
+    const mode=el("helperMode").value;
+    if(mode==="none" || stage<2) return;
+    const hl=tok('--pz-lav-line'), ax=tok('--pz-axis');
+    if(mode==="projection"){
+      line(P.x,0,P.x,P.y,ax,1.5,[6,5]);
+      line(Q.x,0,Q.x,Q.y,ax,1.5,[6,5]);
+      line(0,P.y,P.x,P.y,ax,1.2,[5,5]);
+      line(0,Q.y,Q.x,Q.y,ax,1.2,[5,5]);
+    }
+    line(P.x,P.y,Q.x,P.y,hl,2.5,[6,5]);
+    line(Q.x,P.y,Q.x,Q.y,hl,2.5,[6,5]);
+    ctx.save();
+    ctx.font="700 15px "+FONT; ctx.textAlign='center'; ctx.textBaseline='middle';
+    const below=Q.y>=P.y?20:-16;
+    haloText("Δx = h",(X(P.x)+X(Q.x))/2,Y(P.y)+below,tok('--pz-lav-ink'));
+    ctx.textAlign=Q.x>=P.x?'left':'right';
+    haloText("Δy",X(Q.x)+(Q.x>=P.x?9:-9),(Y(P.y)+Y(Q.y))/2,tok('--pz-lav-ink'));
+    ctx.restore();
+  }
+
+  function draw(){
+    const f=funcs[funcIndex].f, df=funcs[funcIndex].df;
+    const P={x:a,y:f(a)}, Q={x:a+h,y:f(a+h)};
+    tagAvoid=[{x:X(P.x),y:Y(P.y)}].concat(stage>=1?[{x:X(Q.x),y:Y(Q.y)}]:[]);
+    drawGrid();
+    drawFunction();
+    const SEC=tok('--pz-butter-line'), TAN=tok('--pz-ref');
+    const DASH=[11,7];
+    if(stage>=2){
+      const sec=(Q.y-P.y)/(Q.x-P.x);
+      const x1=view.xMin,x2=view.xMax;
+      const y1=P.y+sec*(x1-P.x), y2=P.y+sec*(x2-P.x);
+      const tan=df(a);
+      const secFn=x=>P.y+sec*(x-P.x);
+      if(stage===4){
+        // [버그수정] 애니메이션이 끝난 뒤(h를 바꿔도) 할선이 사라지지 않도록 할선을 함께 그린다.
+        if(tangentBlend>=1){ line(x1,y1,x2,y2,SEC,3.5); tagFor(secFn,"할선",tok('--pz-butter-ink')); }
+        const slope=sec*(1-tangentBlend)+tan*tangentBlend;
+        const isTan=tangentBlend>.65;
+        line(x1,P.y+slope*(x1-P.x),x2,P.y+slope*(x2-P.x),isTan?TAN:SEC,3.5,isTan?DASH:[]);
+        tagFor(x=>P.y+slope*(x-P.x),isTan?"접선":"할선",isTan?tok('--pz-accent-ink'):tok('--pz-butter-ink'));
+      }else{
+        line(x1,y1,x2,y2,SEC,3.5);
+        tagFor(secFn,"할선",tok('--pz-butter-ink'));
+      }
+      drawHelpers(P,Q);
+    }
+    if(stage===5){
+      const tan=df(a),x1=view.xMin,x2=view.xMax;
+      line(x1,P.y+tan*(x1-P.x),x2,P.y+tan*(x2-P.x),TAN,3.5,DASH);
+      tagFor(x=>P.y+tan*(x-P.x),"접선",tok('--pz-accent-ink'));
+    }
+    drawTags();
+    // 점은 선 위에 그린다. P와 Q가 가까우면 Q 이름은 오른쪽 아래로 비켜 놓는다.
+    const near=stage>=1&&Math.hypot(X(Q.x)-X(P.x),Y(Q.y)-Y(P.y))<34;
+    if(stage>=0) point(P.x,P.y,"P",-12,-14);
+    if(stage>=1) point(Q.x,Q.y,"Q",12,near?16:-14);
+  }
+
+  function animateTangent(){
+    cancelAnimationFrame(animFrame);
+    tangentBlend=0;
+    const start=performance.now();
+    function tick(t){
+      tangentBlend=Math.min(1,(t-start)/1100);
+      draw();
+      if(tangentBlend<1) animFrame=requestAnimationFrame(tick);
+    }
+    animFrame=requestAnimationFrame(tick);
+  }
+
+  function setStage(i){
+    stopAuto();
+    stage=Math.max(0,Math.min(stages.length-1,i));
+    if(stage<5 && h<0) h=Math.abs(h);
+    if(stage===2 && el("helperMode").value==="none") el("helperMode").value="triangle";
+    if(stage===4) animateTangent(); else tangentBlend=stage>4?1:0;
+    updateUI();
+    // [2단계] 단계가 바뀌면 단계 카드·조작 카드를 부드럽게 나타나게
+    if(window.PastelUI){ PastelUI.fade(document.querySelector('.stage-card')); PastelUI.fade(document.querySelector('.controls-card')); }
+    // [2단계] 마지막 단계(자유 탐색)에 처음 도착하면 한 번 축하
+    if(stage===stages.length-1 && window.PastelUI) PastelUI.celebrate('2-1-자유탐색','🎉 6단계를 모두 지나 미분계수의 정의를 완성했어요!');
+  }
+
+  function setVisible(id, visible){
+    el(id).classList.toggle("stage-hidden", !visible);
+  }
+
+  function configureStageControls(){
+    const guides = [
+      ["고정점 P 조작", "점 P의 위치를 확인합니다. 필요할 때 잠금을 풀어 a를 바꿀 수 있습니다."],
+      ["이동점 Q 조작", "h 슬라이더로 점 Q의 위치를 바꾸며 a+h의 의미를 확인합니다."],
+      ["평균변화율 조작", "보조선과 계산 과정을 켜서 할선의 기울기를 수식과 연결합니다."],
+      ["접근 과정 조작", "h를 줄이거나 자동 접근을 실행하여 Q가 P에 가까워지는 모습을 관찰합니다."],
+      ["미분계수 확인", "할선이 접선으로 바뀌는 장면과 두 기울기의 값을 비교합니다."],
+      ["자유 탐색", "모든 조작을 사용하여 함수, a, h와 보조 표시를 자유롭게 바꿉니다."]
+    ];
+    el("controlsTitle").textContent = guides[stage][0];
+    el("controlsGuide").innerHTML = termify(guides[stage][1]);
+
+    // 단계별 조작부
+    setVisible("aControl", true);
+    setVisible("hControl", stage >= 1);
+    setVisible("helperGroup", stage >= 2);
+    setVisible("detailControls", stage >= 2);
+    setVisible("metricsPanel", true);
+    setVisible("calcBox", stage >= 2 && el("calcToggle").checked);
+
+    // h 접근 관련 버튼은 접근 단계부터 보여 준다.
+    setVisible("hActionButtons", stage >= 3);
+
+    // 단계별로 의미 있는 수치만 표시한다.
+    setVisible("metricFa", true);
+    setVisible("metricFah", stage >= 1);
+    setVisible("metricSec", stage >= 2);
+    setVisible("metricDer", stage >= 4);
+
+    // 1단계에서는 a의 의미에 집중하되, 기본 잠금은 유지한다.
+    el("aSlider").disabled = locked;
+
+    // 2단계에서는 h의 위치 조절만 허용하고, 3단계부터 세부 표시를 쓴다.
+    el("helperMode").disabled = stage < 2;
+
+    // 마지막 자유 탐색에서만 h<0을 허용한다.
+    const free = stage === 5;
+    el("hSlider").min = free ? -3 : 0.01;
+  }
+
+  function updateUI(){
+    const s=stages[stage];
+    el("stageKicker").textContent=`단계 ${stage+1} / ${stages.length}`;
+    el("stageTitle").textContent=s.title;
+    el("stageText").innerHTML=termify(s.text);
+    el("formula").innerHTML=formulaHTML[stage];
+    el("formula").setAttribute("aria-label",s.formula);
+    configureStageControls();
+    [...el("stepNav").children].forEach((b,i)=>{b.classList.toggle("active",i===stage);b.setAttribute("aria-selected",String(i===stage));});
+    [...el("fnChips").children].forEach((b,i)=>{b.classList.toggle("active",i===funcIndex);b.setAttribute("aria-pressed",String(i===funcIndex));});
+    el("progressBar").style.width=`${(stage+1)/stages.length*100}%`;
+    el("prevBtn").disabled=stage===0;
+    el("nextBtn").disabled=stage===stages.length-1;
+
+    const free=stage===5;
+    el("hSlider").min=free?-3:"0.01";
+    if(!free && h<0) h=Math.abs(h);
+    el("hSlider").value=h;
+    el("hNotice").textContent=free?"자유 탐색에서는 h<0도 사용할 수 있습니다.":"단계 수업에서는 h>0으로 접근합니다.";
+    el("aSlider").disabled=locked;
+    el("lockBtn").textContent=`${locked?"🔒":"🔓"} 고정점 잠금: ${locked?"켜짐":"꺼짐"}`;
+    el("aSlider").value=a;
+    el("aValue").textContent=`a = ${fmt(a)}`;
+    el("hValue").textContent=`h = ${fmt(h,4)}`;
+
+    const f=funcs[funcIndex].f, df=funcs[funcIndex].df;
+    const fa=f(a), fah=f(a+h), sec=(fah-fa)/h, der=df(a);
+    const exact=el("exactToggle").checked;
+    el("faMetric").textContent=exact?exactText(fa):fmt(fa);
+    el("fahMetric").textContent=exact?exactText(fah):fmt(fah);
+    el("secMetric").textContent=exact?exactText(sec):fmt(sec);
+    el("derMetric").textContent=exact?exactText(der):fmt(der);
+
+    // [버그수정] 계산식 안에는 '분수 = 소수' 형태가 끼어들지 않도록 분수(또는 소수) 하나만 쓴다.
+    const calcT=(x,d)=>exact?(fractionApprox(x)||fmt(x,d)):fmt(x,d);
+    const hT=calcT(h,4);
+    const faT=calcT(fa);
+    const fahT=calcT(fah);
+    const secT=exact?exactText(sec):fmt(sec);
+    // [수식] KaTeX로 분수 표기. 계산값은 그대로, '3/4' 같은 분수 글자만 \frac로 바꿔 보여 준다
+    const TF=t=>String(t).replace(/(\d+)\/(\d+)/g,(m,n,d)=>`\\frac{${n}}{${d}}`);
+    const PK=t=>String(t).startsWith('-')?`\\left(${TF(t)}\\right)`:TF(t);   // 음수는 괄호
+    const line=t=>`<div class="calcLine">${TX('\\displaystyle '+t)}</div>`;
+    el("calcBox").innerHTML=
+      line(`\\frac{f(a+h)-f(a)}{h}`)+
+      line(`=\\frac{f(${fmt(a+h)})-f(${fmt(a)})}{${PK(hT)}}`)+
+      line(`=\\frac{${TF(fahT)}-${PK(faT)}}{${PK(hT)}}`)+
+      line(`=${TF(secT)}`);
+    el("calcBox").classList.toggle("show", stage >= 2 && el("calcToggle").checked);
+    setVisible("calcBox", stage >= 2 && el("calcToggle").checked);
+
+    draw();
+  }
+
+  function stopAuto(){
+    if(autoTimer){clearInterval(autoTimer);autoTimer=null;}
+  }
+  function startAuto(){
+    stopAuto();
+    autoTimer=setInterval(()=>{
+      // [버그수정] 자유 탐색(6단계)에서 자동 접근이 끝나면 5단계로 튕겨 나가던 문제 → 4단계에서만 5단계로 이동
+      if(Math.abs(h)<=0.011){stopAuto();if(stage===3)setStage(4);else updateUI();return;}
+      h*=0.82;
+      if(Math.abs(h)<0.01) h=0.01*Math.sign(h||1);
+      updateUI();
+    },90);
+  }
+
+  function selectFunc(i){
+    funcIndex=+i;
+    view={...funcs[funcIndex].range};
+    a=1;h=2;
+    updateUI();
+  }
+  el("aSlider").oninput=e=>{a=+e.target.value;updateUI()};
+  el("hSlider").oninput=e=>{
+    h=+e.target.value;
+    if(Math.abs(h)<0.01) h=0.01*(h<0?-1:1);
+    updateUI();
+  };
+  el("lockBtn").onclick=()=>{locked=!locked;updateUI()};
+  el("halfBtn").onclick=()=>{h*=0.5;if(Math.abs(h)<0.01)h=0.01*Math.sign(h||1);updateUI()};
+  el("tenthBtn").onclick=()=>{h*=0.1;if(Math.abs(h)<0.01)h=0.01*Math.sign(h||1);updateUI()};
+  el("autoBtn").onclick=startAuto;
+  el("pauseBtn").onclick=stopAuto;
+  el("resetHBtn").onclick=()=>{stopAuto();a=1;h=2;updateUI()};   // [UX] 처음 값으로: 고정점 a와 간격 h를 처음 값으로 (단계는 그대로)
+  el("calcToggle").onchange=updateUI;
+  el("exactToggle").onchange=updateUI;
+  el("helperMode").onchange=draw;
+  el("prevBtn").onclick=()=>setStage(stage-1);
+  el("nextBtn").onclick=()=>setStage(stage+1);
+  el("restartBtn").onclick=()=>{a=1;h=2;locked=true;setStage(0)};
+  el("zoomIn").onclick=()=>{
+    const cx=(view.xMin+view.xMax)/2,cy=(view.yMin+view.yMax)/2;
+    const sx=(view.xMax-view.xMin)*0.4, sy=(view.yMax-view.yMin)*0.4;
+    view={xMin:cx-sx,xMax:cx+sx,yMin:cy-sy,yMax:cy+sy};draw();
+  };
+  el("zoomOut").onclick=()=>{
+    const cx=(view.xMin+view.xMax)/2,cy=(view.yMin+view.yMax)/2;
+    const sx=(view.xMax-view.xMin)*0.625, sy=(view.yMax-view.yMin)*0.625;
+    view={xMin:cx-sx,xMax:cx+sx,yMin:cy-sy,yMax:cy+sy};draw();
+  };
+  el("resetView").onclick=()=>{view={...funcs[funcIndex].range};draw()};
+
+  window.addEventListener("resize",resize);
+  new ResizeObserver(()=>requestAnimationFrame(resize)).observe(wrap);
+  resize();
+  updateUI();
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>resize());
+})();
+</script>
+</body>
+</html>

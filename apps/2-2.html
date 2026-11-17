@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>미분 가능성과 연속성 시뮬레이터</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<style>
+/* [2단계 디자인] 공통 테마(복숭아 하늘) 적용. 글꼴·바탕은 테마(PZ 블록)가 정한다. 시범 앱 2-4-1과 같은 카드·알약 언어.
+   이 앱의 색 약속: 주 함수 = --pz-f(하늘), 왼쪽(Q₋·좌극한·좌미분계수) = 버터(할선 색), 오른쪽(Q₊·우극한·우미분계수) = --pz-right(라벤더),
+   점 P = --pz-point, 구멍(극한값 자리) = 흰 채움 + --pz-f 테두리. */
+:root{
+  --leftLine:var(--pz-butter-line); --leftInk:var(--pz-butter-ink);
+  --rightLine:var(--pz-right);      --rightInk:var(--pz-lav-ink);
+  --chartH:460px;
+}
+*{box-sizing:border-box}
+body{margin:0}
+.steps{margin-bottom:16px}
+.step{white-space:nowrap}
+
+/* 배치: 1099px 이하 = [단계 → 그림 → 조작] 한 줄, 1100px 이상 = 왼쪽 [단계·조작] + 오른쪽 그림(sticky) */
+.main{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.main > *{min-width:0;margin:0}
+@media (min-width:1100px){
+  .main{grid-template-columns:minmax(360px,1fr) minmax(0,1.35fr);grid-template-rows:auto auto 1fr;
+    grid-template-areas:"stage graph" "ctrl graph" ". graph";column-gap:20px;align-items:start}
+  .aStage{grid-area:stage} .aCtrl{grid-area:ctrl} .aGraph{grid-area:graph;align-self:start}
+}
+.card{background:var(--pz-panel);border:2px solid var(--pz-line);border-radius:var(--pz-r-lg);box-shadow:var(--pz-shadow);padding:18px 20px}
+.cardTitle{font-family:var(--pz-font-title);font-weight:400;font-size:19px;color:var(--pz-ink);margin:0}
+.hidden{display:none!important}
+.btnSm{padding:9px 14px;font-size:15px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* 단계 카드 */
+.kicker{display:inline-block;font-size:14px;font-weight:700;color:var(--pz-accent-ink);background:var(--pz-accent-soft);padding:5px 12px;border-radius:var(--pz-r-pill)}
+.info h2{font-family:var(--pz-font-title);font-weight:400;font-size:25px;margin:10px 0 6px;color:var(--pz-ink)}
+.info p{margin:0;color:var(--pz-ink2);font-size:15.5px;line-height:1.65}
+.formula{margin-top:14px;background:var(--pz-soft);border-radius:var(--pz-r-md);padding:14px 16px;font-family:var(--pz-font-math);
+  font-size:24px;text-align:center;line-height:1.5;color:var(--pz-ink);overflow-x:auto}
+.formula .kr,.kr{font-family:var(--pz-font);font-size:18px;font-weight:700;font-style:normal}
+/* [수식] 교과서식 수식은 KaTeX로 (1-3과 같은 방식) */
+.katex{font-size:1.1em;white-space:nowrap}
+.m-i{font-style:italic;font-family:var(--pz-font-math)}   /* 조각함수 식(HTML)에서 사용 */
+.navRow{display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap}
+.progress{flex:1;min-width:80px;height:10px;background:var(--pz-line);border-radius:var(--pz-r-pill);overflow:hidden}
+.progress div{height:100%;background:var(--pz-accent);border-radius:var(--pz-r-pill);transition:width .25s ease}
+
+/* 조작 카드 */
+.controls{display:flex;flex-direction:column;gap:12px}
+.control-title p{margin:4px 0 0;color:var(--pz-muted);font-size:15px;line-height:1.55}
+.block{background:var(--pz-soft);border-radius:var(--pz-r-md);padding:12px 14px}
+.block-head{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:700;font-size:15.5px;color:var(--pz-ink2);margin-bottom:6px}
+.value{background:var(--pz-panel);color:var(--pz-accent-ink);padding:4px 11px;border-radius:var(--pz-r-pill);font-size:15px;font-weight:800;
+  font-family:var(--pz-mono);box-shadow:0 0 0 2px var(--pz-line) inset;white-space:nowrap}
+.block input[type=range]{width:100%;display:block;margin:8px 0}
+.sideHead{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:700;font-size:15.5px;margin-top:6px}
+.sideHead.L{color:var(--leftInk)} .sideHead.R{color:var(--rightInk)}
+.sideHead.L label::before{content:"← "}
+input[type=number]{width:84px}   /* 모양·포커스는 theme.css */
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.metric{background:var(--pz-soft);border-radius:var(--pz-r-md);padding:9px 14px}
+#mFa{grid-column:1 / -1}
+.metric .lab{font-size:14px;color:var(--pz-muted);font-weight:700}
+.metric .num{margin-top:2px;font-size:20px;font-weight:800;font-family:var(--pz-mono);color:var(--pz-ink)}
+.metric .num.dne{font-family:var(--pz-font);font-size:15px;color:var(--pz-bad-ink);padding-top:4px}
+.metric.L{box-shadow:inset 4px 0 0 var(--leftLine)} .metric.R{box-shadow:inset -4px 0 0 var(--rightLine)}
+.metric.L .lab{color:var(--leftInk)} .metric.R .lab{color:var(--rightInk)}
+.metric.L .lab::before{content:"← "} .metric.R .lab::after{content:" →"}
+.judgement{background:var(--pz-panel);border-radius:var(--pz-r-md);padding:12px 14px;box-shadow:0 0 0 2px var(--pz-line) inset}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px}
+.badge{font-size:14px;font-weight:800;border-radius:var(--pz-r-pill);padding:5px 12px}
+.badge.good{background:var(--pz-ok-soft);color:var(--pz-ok-ink)} .badge.good::before{content:"✓ "}
+.badge.bad{background:var(--pz-bad-soft);color:var(--pz-bad-ink)} .badge.bad::before{content:"✗ "}
+.badge.warn{background:var(--pz-warn-soft);color:var(--pz-warn-ink)}
+.checkline{padding:6px 0;font-size:15px;border-bottom:2px dashed var(--pz-line);color:var(--pz-ink2)}
+.checkline:last-child{border-bottom:0}
+.checkline.ok{color:var(--pz-ok-ink);font-weight:700} .checkline.no{color:var(--pz-bad-ink);font-weight:700}
+.checkline strong{color:var(--pz-ink)}
+#showTable{margin-top:8px}
+.numtable{display:none;margin-top:10px;overflow:auto}
+.numtable table{width:100%;border-collapse:separate;border-spacing:0;font-size:15px;border-radius:var(--pz-r-sm);overflow:hidden;box-shadow:0 0 0 2px var(--pz-line) inset}
+.numtable th{background:var(--pz-soft);color:var(--pz-ink2);font-weight:700}
+.numtable th,.numtable td{padding:7px 8px;text-align:center;border-bottom:1px solid var(--pz-line)}
+.numtable td{font-family:var(--pz-mono)}
+.numtable th:nth-child(2){color:var(--leftInk)} .numtable th:nth-child(3){color:var(--rightInk)}
+.piece-formula{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--pz-panel);border-radius:var(--pz-r-sm);
+  padding:8px 12px;margin:0 0 10px;font-family:var(--pz-font-math);font-size:20px;color:var(--pz-ink)}
+.piece-formula .brace{font-size:46px;line-height:1;font-weight:300;transform:scaleX(.7)}
+.piece-formula .cases{display:grid;grid-template-columns:auto auto;column-gap:16px;row-gap:2px;text-align:left}
+.piece-formula .cond{font-size:17px;color:var(--pz-muted)}
+.piece-grid{display:grid;grid-template-columns:28px minmax(0,1fr) 84px auto;gap:8px 10px;align-items:center;margin-bottom:10px}
+.piece-grid label{font-family:var(--pz-font-math);font-style:italic;font-size:21px;font-weight:700;color:var(--pz-accent-ink);text-align:center}
+.piece-grid input[type=range]{width:100%;margin:0}
+.presets{display:flex;gap:6px;flex-wrap:wrap}
+/* 5단계: 한눈에 정리 표 */
+.quick{width:100%;border-collapse:separate;border-spacing:0 6px;font-size:15.5px}
+.quick th{font-size:14px;color:var(--pz-muted);text-align:left;font-weight:700;padding:0 8px}
+.quick td{background:var(--pz-soft);padding:9px 10px}
+.quick td:first-child{border-radius:var(--pz-r-sm) 0 0 var(--pz-r-sm);font-weight:800}
+.quick td:last-child{border-radius:0 var(--pz-r-sm) var(--pz-r-sm) 0}
+.yes{color:var(--pz-ok-ink);font-weight:800} .no{color:var(--pz-bad-ink);font-weight:800}
+/* 7단계: 명제 정리 */
+.rules{font-size:16px;line-height:1.8;color:var(--pz-ink2)}
+.rules .rule{background:var(--pz-soft);border-radius:var(--pz-r-md);padding:12px 16px;margin-bottom:10px}
+.rules .rule:last-child{margin-bottom:0}
+.rules strong{display:block;font-family:var(--pz-font-title);font-weight:400;font-size:22px;color:var(--pz-ink);margin-bottom:2px}
+.rules .t{color:var(--pz-ok-ink);font-weight:700} .rules .f{color:var(--pz-bad-ink);font-weight:700}
+.rules .t::before{content:"✓ "} .rules .f::before{content:"✗ "}
+.inline-math{display:inline-block;padding:0 3px;font-family:var(--pz-font-math);font-size:1.08em;font-style:italic;white-space:nowrap}
+
+/* 그림 카드 */
+.visual{padding:14px 16px 12px}
+.visual-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start;margin-bottom:10px}
+.visual-title{font-family:var(--pz-font-title);font-weight:400;font-size:21px;color:var(--pz-ink)}
+.visual-sub{font-size:15px;color:var(--pz-muted)}
+.casebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.casebar .label{font-size:14px;color:var(--pz-muted);font-weight:700}
+.case-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.case-tabs .pz-chip{flex-direction:column;gap:0;padding:6px 14px;line-height:1.25;border-radius:var(--pz-r-md)}
+.case-tabs .pz-chip b{font-size:16px;font-weight:800}
+.case-tabs .pz-chip small{font-size:13px;font-weight:600;opacity:.9}
+.canvaswrap{position:relative;height:var(--chartH)}
+/* 주의: 맨 canvas 선택자는 테마의 축하(컨페티) 캔버스까지 덮으므로 그림 카드 안으로 한정 */
+.visual canvas{width:100%;height:100%;display:block;border-radius:var(--pz-r-md);background:var(--pz-panel)}
+.legend{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:14px;color:var(--pz-ink2);font-weight:600;margin-top:8px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{display:inline-block;width:22px;height:0;border-top:4px solid;border-radius:var(--pz-r-pill)}
+.pt{display:inline-block;width:13px;height:13px;border-radius:50%;border:3.5px solid var(--pz-point);background:var(--pz-panel)}
+.pt.fill{background:var(--pz-point)} .pt.hole{border-color:var(--pz-f)}
+.compare-grid{display:none;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.compare-card{background:var(--pz-soft);border-radius:var(--pz-r-md);padding:12px}
+.compare-card canvas{height:128px;border-radius:var(--pz-r-sm)}
+.compare-card h3{margin:8px 0 4px;font-family:var(--pz-font-title);font-weight:400;font-size:20px;color:var(--pz-ink)}
+.compare-card .badges{margin:4px 0 6px}
+.checks{font-size:14px;line-height:1.6;color:var(--pz-ink2)}
+.summary{display:none}
+.venn{display:block;width:100%;height:auto;max-height:calc(var(--pz-avail-h) - 190px);margin:0 auto;border-radius:var(--pz-r-md);background:var(--pz-panel)}
+.venn .uni{fill:var(--pz-bg2);stroke:var(--pz-line2);stroke-width:2}
+.venn .cont{fill:var(--pz-mint-soft);stroke:var(--pz-mint-line);stroke-width:3.5}
+.venn .diff{fill:var(--pz-sky-soft);stroke:var(--pz-sky-line);stroke-width:3.5}
+.venn .setLab{font-family:var(--pz-font-title);font-size:21px;text-anchor:middle}
+.venn .setLab.d{font-size:19px}
+.venn .setLab.c{fill:var(--pz-mint-ink)} .venn .setLab.d{fill:var(--pz-sky-ink)}
+.venn .uniLab{font-family:var(--pz-font);font-size:14px;font-weight:700;fill:var(--pz-muted)}
+.venn .item rect{fill:var(--pz-panel);stroke:var(--pz-line2);stroke-width:2}
+.venn .item text{font-family:var(--pz-font);font-size:16px;font-weight:800;fill:var(--pz-ink);text-anchor:middle;dominant-baseline:central}
+.vennNote{font-size:14px;color:var(--pz-muted);text-align:center;margin-top:8px}
+@media(max-width:650px){.compare-grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr}.piece-grid{grid-template-columns:24px minmax(0,1fr) 72px}.piece-grid button{grid-column:2 / -1;justify-self:start}}
+</style>
+<!-- PZ:HEAD -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../shared/theme.css">
+<script type="application/json" id="pz-meta">{"slug": "2-2", "unit": "2-2", "title": "미분가능성과 연속 사이의 관계", "group": null, "home": "../index.html", "guide": "../guides/2-2.html"}</script>
+<script id="pz-ui" src="../shared/ui.js"></script>
+<!-- /PZ:HEAD -->
+</head>
+<body>
+<div class="app pz-wrap">
+  <!-- [2단계] 상단 바가 단원·제목을 보여 주므로 앱 제목(h1)은 지우고 한 줄 소개만 남김 -->
+  <p class="desc pz-desc">한 점에서 <span class="pz-term" data-tip="연속">연속</span>성과 좌·우 <span class="pz-term" data-tip="미분계수">미분계수</span>를 비교하며 관계를 탐구합니다.</p>
+  <div class="steps pz-tabs" id="steps" role="tablist" aria-label="단계"></div>
+
+  <div class="main">
+    <section class="card info aStage">
+      <div class="kicker" id="kicker"></div><h2 id="stageTitle"></h2><p id="stageText"></p><div class="formula" id="formula"></div>
+      <div class="navRow">
+        <button id="prev" class="pz-btn pz-btn-ghost btnSm">← 이전</button><div class="progress" aria-hidden="true"><div id="bar"></div></div>
+        <button id="restart" class="pz-btn pz-btn-soft btnSm">↺ 처음부터</button><button id="next" class="pz-btn pz-btn-primary btnSm">다음 →</button>
+      </div>
+    </section>
+
+    <section class="card visual aGraph pz-sticky" id="visual">
+      <div class="visual-head">
+        <div><div class="visual-title" id="visualTitle"></div><div class="visual-sub" id="visualSub"></div></div>
+        <div class="casebar" id="casebar">
+          <span class="label">대표 사례</span>
+          <div class="case-tabs" id="tabs" role="group" aria-label="대표 사례"></div>
+        </div>
+      </div>
+      <div class="canvaswrap" id="canvaswrap">
+        <canvas id="graph" aria-label="x=0 근처의 함수 그래프와 점 P, 왼쪽·오른쪽 점과 할선"></canvas>
+      </div>
+      <div class="legend" id="legend">
+        <span><i class="sw" style="border-color:var(--pz-f)"></i>y = f(x)</span>
+        <span><i class="pt fill"></i>P(0, f(0))</span>
+        <span><i class="pt hole"></i>구멍(채워지지 않은 점)</span>
+        <span class="lgQ"><i class="sw" style="border-color:var(--leftLine)"></i>← 왼쪽 점 Q₋·할선</span>
+        <span class="lgQ"><i class="sw" style="border-color:var(--rightLine)"></i>오른쪽 점 Q₊·할선 →</span>
+      </div>
+      <div class="compare-grid" id="compareGrid"></div>
+      <div class="summary" id="summary">
+        <!-- [2단계] 벤다이어그램: px 고정 배치 → SVG viewBox(화면 폭에 맞춰 함께 늘고 줄어듦) -->
+        <svg class="venn" viewBox="0 0 500 360" role="img" aria-label="연속인 함수의 집합 안에 미분 가능한 함수의 집합이 들어 있는 벤다이어그램">
+          <rect class="uni" x="2" y="2" width="496" height="356" rx="22"/>
+          <circle class="circle cont" cx="190" cy="185" r="150"/>
+          <circle class="circle diff" cx="190" cy="222" r="88"/>
+          <text class="setLab c" x="190" y="72">연속인 함수</text>
+          <text class="setLab d" x="190" y="196">미분 가능한 함수</text>
+          <g class="item"><rect x="165" y="238" width="50" height="32" rx="16"/><text x="190" y="254">x²</text></g>
+          <!-- [버그수정] |x| 표지가 '미분 가능한 함수' 원 경계에 걸쳐 있어 위치를 두 원 사이로 옮김 -->
+          <g class="item"><rect x="252" y="100" width="50" height="32" rx="16"/><text x="277" y="116">|x|</text></g>
+          <g class="item"><rect x="380" y="70" width="96" height="32" rx="16"/><text x="428" y="86">점프 함수</text></g>
+          <g class="item"><rect x="380" y="270" width="96" height="32" rx="16"/><text x="428" y="286">구멍 함수</text></g>
+        </svg>
+      </div>
+    </section>
+
+    <section class="card controls aCtrl">
+      <div class="control-title"><h3 class="cardTitle" id="controlTitle"></h3><p id="controlGuide"></p></div>
+
+      <div class="block" id="distanceBlock">
+        <div class="block-head"><span id="distanceLabel">접근 거리 d</span><span class="value" id="distanceValue"></span></div>
+        <input type="range" id="distance" min="0.02" max="2.5" step="0.01" value="1.5">
+        <div class="row" id="distanceButtons"><button id="half" class="pz-btn pz-btn-ghost btnSm">1/2로</button><button id="tenth" class="pz-btn pz-btn-ghost btnSm">1/10로</button><button id="auto" class="pz-btn pz-btn-primary btnSm">▶ 자동 접근</button><button id="pause" class="pz-btn pz-btn-soft btnSm">❚❚ 일시 정지</button><button id="resetD" class="pz-btn pz-btn-ghost btnSm">d 초기화</button></div>
+      </div>
+
+      <div class="block hidden" id="dualBlock">
+        <div class="block-head"><span>좌우 거리 개별 조절</span></div>
+        <div class="sideHead L"><label for="dl">왼쪽 d₋</label><span class="value" id="dlVal"></span></div><input type="range" id="dl" min="0.02" max="2.5" step="0.01" value="1">
+        <div class="row"><button id="resetDl" class="pz-btn pz-btn-ghost btnSm">d₋ 초기화</button></div>
+        <div class="sideHead R"><label for="dr">오른쪽 d₊ →</label><span class="value" id="drVal"></span></div><input type="range" id="dr" min="0.02" max="2.5" step="0.01" value="1">
+        <div class="row"><button id="resetDr" class="pz-btn pz-btn-ghost btnSm">d₊ 초기화</button></div>
+        <div class="row" style="margin-top:10px"><button id="same" class="pz-btn pz-btn-soft btnSm">같은 거리로</button><button id="bothAuto" class="pz-btn pz-btn-primary btnSm">▶ 양쪽 자동 접근</button><button id="resetBoth" class="pz-btn pz-btn-ghost btnSm">둘 다 초기화</button></div>
+      </div>
+
+      <!-- [2단계] 6단계 핵심 조작(계수 슬라이더)이 첫 화면에 보이도록 지표보다 위로 옮김 -->
+      <div class="block hidden" id="pieceBlock">
+        <div class="block-head"><span>조각함수 계수</span></div>
+        <div class="piece-formula" aria-label="f(x)={ mx+b (x<0), x²+c (x≥0) }">
+          <span><span class="m-i">f</span>(<span class="m-i">x</span>) =</span><span class="brace">{</span>
+          <span class="cases"><span><span class="m-i">mx</span> + <span class="m-i">b</span></span><span class="cond">(<span class="m-i">x</span> &lt; 0)</span>
+            <span><span class="m-i">x</span>² + <span class="m-i">c</span></span><span class="cond">(<span class="m-i">x</span> ≥ 0)</span></span>
+        </div>
+        <div class="piece-grid">
+          <label for="mRange">m</label><input id="mRange" type="range" min="-4" max="4" step="0.1" value="1"><input id="mNum" type="number" min="-4" max="4" step="0.1" value="1" aria-label="m 값"><button id="resetM" class="pz-btn pz-btn-ghost btnSm">m 초기화</button>
+          <label for="bRange">b</label><input id="bRange" type="range" min="-4" max="4" step="0.1" value="1"><input id="bNum" type="number" min="-4" max="4" step="0.1" value="1" aria-label="b 값"><button id="resetB" class="pz-btn pz-btn-ghost btnSm">b 초기화</button>
+          <label for="cRange">c</label><input id="cRange" type="range" min="-4" max="4" step="0.1" value="-1"><input id="cNum" type="number" min="-4" max="4" step="0.1" value="-1" aria-label="c 값"><button id="resetC" class="pz-btn pz-btn-ghost btnSm">c 초기화</button>
+        </div>
+        <div class="presets">
+          <button data-preset="jump" class="pz-chip">불연속 예시</button>
+          <button data-preset="cont" class="pz-chip">연속하게</button>
+          <button data-preset="contNotDiff" class="pz-chip">연속·미분 불가</button>
+          <button data-preset="diff" class="pz-chip">미분 가능하게</button>
+          <button data-preset="reset" class="pz-btn pz-btn-ghost btnSm">↺ 처음 값으로</button>
+        </div>
+      </div>
+
+      <div class="metrics" id="metrics">
+        <div class="metric" id="mFa"><div class="lab">f(0)</div><div class="num" id="fa"></div></div>
+        <div class="metric L" id="mLL"><div class="lab">좌극한</div><div class="num" id="ll"></div></div>
+        <div class="metric R" id="mRL"><div class="lab">우극한</div><div class="num" id="rl"></div></div>
+        <div class="metric L" id="mLD"><div class="lab">좌미분계수</div><div class="num" id="ld"></div></div>
+        <div class="metric R" id="mRD"><div class="lab">우미분계수</div><div class="num" id="rd"></div></div>
+      </div>
+
+      <div class="judgement" id="judgement">
+        <div class="badges" id="badges"></div>
+        <div id="checks"></div>
+        <button id="showTable" class="pz-btn pz-btn-ghost btnSm">수치 변화 보기</button>
+        <div class="numtable" id="numtable"></div>
+      </div>
+
+      <!-- [2단계] 5단계(대표 사례 비교)에서 비어 보이던 조작 칸: 네 사례의 판정을 한눈에 -->
+      <div class="hidden" id="quickBlock">
+        <table class="quick" id="quickTable"></table>
+      </div>
+
+      <!-- [2단계] 7단계(관계 정리): 명제 정리를 조작 칸으로 옮겨 그림 칸은 벤다이어그램을 크게 -->
+      <div class="rules hidden" id="rulesBlock">
+        <div class="rule">
+          <strong>미분 가능 ⇒ 연속</strong>
+          <span class="t">참: <span class="pz-term" data-tip="미분가능">미분 가능</span>하면 <span class="pz-term" data-tip="연속">연속</span>이다.</span><br>
+          <span class="t">참: <span class="pz-term" data-tip="불연속">불연속</span>이면 미분 가능하지 않다. <small>(대우)</small></span>
+        </div>
+        <div class="rule">
+          <strong>연속 ⇏ 미분 가능</strong>
+          반례: <span class="inline-math">f(x) = |x|</span>는
+          <span class="inline-math">x = 0</span>에서 연속이지만 미분 가능하지 않다.<br>
+          <span class="f">거짓: 미분 불가능하면 불연속이다.</span>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const stages=[
+["연속성 확인","f(0), 좌극한, 우극한을 한 화면에서 비교하고 연속 조건을 판단합니다.","좌극한 = 우극한 = f(0)"],
+["왼쪽 미분계수","왼쪽 점 Q₋가 P에 접근할 때 할선의 기울기를 관찰합니다.","lim(h→0−)[f(h)-f(0)]/h"],
+["오른쪽 미분계수","오른쪽 점 Q₊가 P에 접근할 때 할선의 기울기를 관찰합니다.","lim(h→0+)[f(h)-f(0)]/h"],
+["미분 가능성 판단","좌미분계수와 우미분계수를 나란히 비교합니다.","좌미분계수 = 우미분계수"],
+["대표 사례 비교","네 대표 사례의 연속성과 미분 가능성을 한눈에 비교합니다.","연속성과 미분 가능성은 같은 조건이 아니다."],
+["조각함수 실험","m, b, c를 조절해 연속 조건과 미분 가능 조건을 찾아봅니다.","연속: b=c,  미분 가능: b=c 그리고 m=0"],
+["관계 정리","미분 가능성과 연속성의 포함 관계와 참·거짓 명제를 정리합니다.","미분 가능 ⇒ 연속,  연속 ⇏ 미분 가능"]
+];
+/* [수식] 단계 수식을 교과서 표기(KaTeX, 1-3과 같은 KaTeX 0.16.9)로. 내용은 위 문자열과 같다(aria-label로도 남김). 못 불러오면 식 글자 그대로 */
+const TX=(t,d=false)=>{ try{ return window.katex?katex.renderToString(t,{throwOnError:false,displayMode:d}):t; }catch(e){ return t; } };
+const formulaHTML=[
+ `<span class="kr">좌극한 = 우극한 =</span> ${TX('f(0)')}`,
+ TX('\\displaystyle\\lim_{h\\to 0-}\\frac{f(h)-f(0)}{h}'),
+ TX('\\displaystyle\\lim_{h\\to 0+}\\frac{f(h)-f(0)}{h}'),
+ `<span class="kr">좌미분계수 = 우미분계수</span>`,
+ `<span class="kr">연속성과 미분 가능성은 같은 조건이 아니다.</span>`,
+ `<span class="kr">연속:</span> ${TX('b=c')}, &nbsp;<span class="kr">미분 가능:</span> ${TX('b=c')} <span class="kr">그리고</span> ${TX('m=0')}`,
+ `<span class="kr">미분 가능 ⇒ 연속, &nbsp;연속 ⇏ 미분 가능</span>`
+];
+/* [2단계] 설명 문장 속 용어(단계·칸마다 처음 한 번)를 툴팁으로 감싼다. '미분 가능'처럼 띄어 쓴 말은 사전의 '미분가능'으로 연결 */
+const TERMS=[["좌미분계수","미분계수"],["우미분계수","미분계수"],["평균변화율","평균변화율"],["미분계수","미분계수"],["미분 가능","미분가능"],["불연속","불연속"],["좌극한","좌극한"],["우극한","우극한"],["할선","할선"],["연속","연속"]];
+function termify(text){
+ const esc=String(text).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+ const slots=[],used={};let s=esc;
+ TERMS.forEach(([w,key])=>{if(used[key])return;const i=s.indexOf(w);if(i<0)return;used[key]=1;
+  slots.push(`<span class="pz-term" data-tip="${key}" tabindex="0">${w}</span>`);
+  s=s.slice(0,i)+"\u0000"+(slots.length-1)+"\u0000"+s.slice(i+w.length);});
+ return s.replace(/\u0000(\d+)\u0000/g,(m,n)=>slots[+n]);
+}
+const cases=[
+{name:"x²",sub:"연속·미분 가능",kind:"poly",f:x=>x*x,fa:0,ll:0,rl:0,ld:0,rd:0},
+{name:"|x|",sub:"연속·미분 불가능",kind:"abs",f:x=>Math.abs(x),fa:0,ll:0,rl:0,ld:-1,rd:1},
+{name:"점프 함수",sub:"상수 → 일차 점프",kind:"jump",f:x=>x<0?-1:x+1,fa:1,ll:-1,rl:1,ld:null,rd:1},
+{name:"구멍 함수",sub:"극한은 존재, 불연속",kind:"hole",f:x=>x===0?2:x*x+1,fa:2,ll:1,rl:1,ld:null,rd:null}
+];
+let stage=0,ci=0,d=1.5,dl=1,dr=1,timer=null;
+let m=1,b=1,c=-1;
+let pieceByHand=false; // [2단계] 조각함수 미션 축하: 프리셋이 아니라 직접 조절해서 찾았을 때만
+const ctx=$("graph").getContext("2d");
+
+/* [2단계] 테마 색 읽기·글자 크기(zoom) 비율·흰 테두리 글자 */
+const tokCache={}; // 색은 실행 중 바뀌지 않으므로 한 번 읽은 값을 기억(그리기 속도)
+function tok(name){
+ if(tokCache[name])return tokCache[name];
+ return (tokCache[name]=tok0(name));
+}
+function tok0(name){
+ if(window.PastelUI)return PastelUI.color(name);
+ let v=getComputedStyle(document.documentElement).getPropertyValue(name).trim(),g=0;
+ while(/^var\(/.test(v)&&g++<6)v=getComputedStyle(document.documentElement).getPropertyValue(v.replace(/^var\(\s*|\s*\)$/g,'')).trim();
+ return v||'#888';
+}
+function cssScale(e){const r=e.getBoundingClientRect();return (e.clientWidth>0&&r.width>0)?r.width/e.clientWidth:1}
+const FONT='"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+function haloText(cx,text,x,y,color){cx.save();cx.lineJoin='round';cx.lineWidth=5;cx.strokeStyle='rgba(255,255,255,0.95)';cx.strokeText(text,x,y);cx.fillStyle=color;cx.fillText(text,x,y);cx.restore()}
+
+stages.forEach((s,i)=>{let bt=document.createElement("button");bt.className="step pz-tab";bt.setAttribute("role","tab");bt.textContent=`${i+1}. ${s[0]}`;bt.onclick=()=>setStage(i);$("steps").appendChild(bt)});
+cases.forEach((c,i)=>{let bt=document.createElement("button");bt.className="tab pz-chip";bt.innerHTML=`<b>${c.name}</b><small>${c.sub}</small>`;bt.onclick=()=>{ci=i;update()};$("tabs").appendChild(bt)});
+function fmt(x){if(x===null)return"존재하지 않음";if(!Number.isFinite(x))return x<0?"−∞":"∞";return Math.abs(x)<1e-9?"0":Number(x.toFixed(3)).toString()}
+function current(){
+ if(stage===5)return {name:"조각함수",kind:"piece",f:x=>x<0?m*x+b:x*x+c,fa:c,ll:b,rl:c,ld:(Math.abs(b-c)<1e-9?m:null),rd:0}; // [버그수정] f(0)=c이고 x≥0 조각이 x²+c이므로 우미분계수는 b,c와 무관하게 항상 0
+ return cases[ci];
+}
+function continuity(ca){return ca.ll===ca.rl&&ca.rl===ca.fa}
+function differentiable(ca){return continuity(ca)&&ca.ld!==null&&ca.rd!==null&&Math.abs(ca.ld-ca.rd)<1e-9}
+
+/* [2단계] 그래프 높이: 스플릿(1100px↑)에서는 처음 화면과 sticky 상태 모두에서 카드가 다 보이게, 한 줄에서는 폭의 62%·화면의 58% 이하 */
+const SPLIT_MQ=window.matchMedia('(min-width: 1100px)');let chartH=0;
+function fitChart(){
+ const wrap=$("canvaswrap"),card=$("visual");if(!wrap.clientWidth)return;
+ const k=cssScale(wrap),cssW=wrap.clientWidth,vh=innerHeight/k;let hh;
+ if(SPLIT_MQ.matches){
+  const cr=card.getBoundingClientRect(),wr=wrap.getBoundingClientRect();
+  const top0=(cr.top+scrollY)/k,chrome=(cr.height-wr.height)/k;
+  const bar=(document.querySelector('.pz-topbar')||{offsetHeight:64}).offsetHeight/k;
+  hh=Math.max(300,Math.min(vh-Math.min(top0,vh*.45)-chrome-16,vh-bar-12/k-chrome-24,cssW*1.05));
+ }else hh=Math.max(280,Math.min(cssW*.62,vh*.58));
+ hh=Math.round(hh);if(hh!==chartH){chartH=hh;document.documentElement.style.setProperty('--chartH',hh+'px')}
+}
+function resize(){
+ fitChart();
+ const cv=$("graph"),dpr=(devicePixelRatio||1)*cssScale(cv); // [2단계] zoom만큼 해상도를 올리고, 그리기는 CSS px(clientWidth) 기준
+ measure();cv.width=Math.max(1,Math.round(cv.clientWidth*dpr));cv.height=Math.max(1,Math.round(cv.clientHeight*dpr));ctx.setTransform(dpr,0,0,dpr,0,0);draw();
+ if(stage===4)cases.forEach((ca,i)=>{const mc=$("mini"+i);if(mc)drawMini(mc,ca)});
+}
+/* [2단계] 그리기 크기: resize() 때만 재서 기억(그릴 때마다 clientWidth를 읽으면 레이아웃 계산이 강제돼 자동 접근이 느려짐) */
+let CW=1,CH=1;function measure(){CW=$("graph").clientWidth||1;CH=$("graph").clientHeight||1}
+function W(){return CW} function H(){return CH}
+function X(x){return (x+3)/6*W()} function Y(y){return H()-(y+3)/6*H()}
+function line(x1,y1,x2,y2,col,w=2,dash=[]){ctx.save();ctx.strokeStyle=col;ctx.lineWidth=w;ctx.lineCap='round';ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(X(x1),Y(y1));ctx.lineTo(X(x2),Y(y2));ctx.stroke();ctx.restore()}
+/* [2단계] 점: kind 'fixed' = 채운 점 P, 'hole' = 흰 채움+함수 색 테두리(구멍), 'move' = 흰 채움+--pz-point 테두리(움직이는 점) */
+function point(x,y,kind,label,labelColor,dx=11,dy=-13){
+ ctx.save();ctx.lineWidth=3.5;
+ if(kind==="fixed"){ctx.fillStyle=tok('--pz-point');ctx.strokeStyle='#fff';}
+ else if(kind==="hole"){ctx.fillStyle='#fff';ctx.strokeStyle=tok('--pz-f');}
+ else {ctx.fillStyle='#fff';ctx.strokeStyle=tok('--pz-point');}
+ ctx.beginPath();ctx.arc(X(x),Y(y),kind==="fixed"?8:7,0,Math.PI*2);ctx.fill();ctx.stroke();
+ if(kind==="fixed"){ctx.strokeStyle=tok('--pz-point');ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(X(x),Y(y),10,0,Math.PI*2);ctx.stroke();}
+ if(label){ctx.font="800 16px "+FONT;ctx.textBaseline='middle';ctx.textAlign=dx<0?'right':'left';haloText(ctx,label,X(x)+dx,Y(y)+dy,labelColor||tok('--pz-ink'));}
+ ctx.restore();
+}
+function drawAxes(){
+ let w=W(),h=H();ctx.clearRect(0,0,w,h);ctx.fillStyle=tok('--pz-panel');ctx.fillRect(0,0,w,h);
+ const grid=tok('--pz-grid'),axis=tok('--pz-axis');
+ for(let i=-3;i<=3;i++){line(i,-3,i,3,i===0?axis:grid,i===0?1.6:1);line(-3,i,3,i,i===0?axis:grid,i===0?1.6:1)}
+ // [2단계] 눈금 숫자(13px)
+ ctx.save();ctx.font="500 13px "+FONT;ctx.fillStyle=tok('--pz-muted');
+ ctx.textAlign="center";ctx.textBaseline="top";for(let i=-2;i<=2;i++){if(i)ctx.fillText(String(i).replace('-','−'),X(i),Y(0)+6)}
+ ctx.textAlign="right";ctx.textBaseline="middle";for(let i=-2;i<=2;i++){if(i)ctx.fillText(String(i).replace('-','−'),X(0)-7,Y(i))}
+ ctx.textAlign="right";ctx.textBaseline="top";ctx.fillText("O",X(0)-6,Y(0)+6);
+ ctx.restore();
+}
+function drawFunction(ca){
+ ctx.save();ctx.strokeStyle=tok('--pz-f');ctx.lineWidth=3.5;ctx.lineCap='round';ctx.lineJoin='round';
+
+ // 불연속점/구멍에서는 좌우 조각을 끊어서 그린다.
+ const needSplit = ["jump","hole","piece"].includes(ca.kind);
+
+ if(needSplit){
+   // 왼쪽 조각: x < 0
+   ctx.beginPath();
+   let startedL=false;
+   for(let i=0;i<=700;i++){
+     let x=-3+6*i/700;
+     if(x>=0) break;
+     let y=ca.f(x);
+     if(!startedL){ctx.moveTo(X(x),Y(y)); startedL=true;}
+     else ctx.lineTo(X(x),Y(y));
+   }
+   ctx.stroke();
+
+   // 오른쪽 조각: x >= 0
+   ctx.beginPath();
+   let startedR=false;
+   for(let i=0;i<=700;i++){
+     let x=-3+6*i/700;
+     if(x<0) continue;
+     if(ca.kind==="hole"&&x===0) continue; // [버그수정] 구멍 함수에서 (0,f(0))→구멍으로 세로선이 그려지던 문제
+     let y=ca.f(x);
+     if(!startedR){ctx.moveTo(X(x),Y(y)); startedR=true;}
+     else ctx.lineTo(X(x),Y(y));
+   }
+   ctx.stroke();
+ } else {
+   ctx.beginPath();
+   let started=false;
+   for(let i=0;i<=700;i++){
+     let x=-3+6*i/700;
+     let y=ca.f(x);
+     if(!started){ctx.moveTo(X(x),Y(y));started=true;}
+     else ctx.lineTo(X(x),Y(y));
+   }
+   ctx.stroke();
+ }
+ ctx.restore();
+ // [2단계] 곡선 이름표 (오른쪽 끝 근처, 하늘색 글자)
+ tagFor(ca.f,"y = f(x)",tok('--pz-sky-ink'),"right",0);
+}
+/* 특수점 표시 (선 위에 그리도록 draw()에서 마지막에 호출) */
+function drawSpecial(ca){
+ if(ca.kind==="jump"){
+   point(0,-1,"hole");   // 왼쪽 극한값
+   point(0,1,"fixed","P",null,-12,-14);        // 함수값
+ }
+ else if(ca.kind==="hole"){
+   point(0,1,"hole");    // 구멍
+   point(0,2,"fixed","P",null,-12,-14);        // 함수값
+ }
+ else if(ca.kind==="piece"){
+   // x<0 조각의 끝점은 기본적으로 뚫린 점, x>=0에서의 함수값은 닫힌 점
+   if(Math.abs(b-c)>1e-9){
+     point(0,b,"hole");
+   }
+   point(0,c,"fixed","P",null,-12,-14);
+ }
+ else {
+   point(0,ca.fa,"fixed","P",null,-12,-14);
+ }
+}
+/* [2단계] 선 이름표: side 'right'면 보이는 영역 안 가장 오른쪽, 'left'면 가장 왼쪽 근처 (점 주변 40px은 피함) */
+const tagSpots=[];let tagAvoid=[];
+function tagFor(fn,text,color,side,xFrom){
+ const w=W(),h=H();let at=null;
+ for(let i=0;i<=360;i++){const x=-3+6*i/360;if(side==="right"&&x<xFrom)continue;if(side==="left"&&x>xFrom)continue;
+  const px=X(x),py=Y(fn(x));
+  if(Number.isFinite(py)&&py>22&&py<h-26&&px>14&&px<w-14&&!tagAvoid.some(q=>Math.hypot(q.x-px,q.y-py)<40)){if(side==="right"||!at)at={px,py};}}
+ if(at)tagSpots.push({text,color,side,...at});
+}
+function drawTags(){
+ ctx.save();ctx.font="700 15px "+FONT;ctx.textBaseline="alphabetic";const placed=[],h=H();
+ tagSpots.forEach(s=>{let y=s.py-10;
+  for(let g=0;g<6&&placed.some(p=>Math.abs(p.y-y)<18&&Math.abs(p.x-s.px)<130);g++)y+=(s.py>h/2?-19:19);
+  y=Math.max(18,Math.min(h-6,y));placed.push({x:s.px,y});
+  ctx.textAlign=s.side==="left"?"left":"right";haloText(ctx,s.text,s.px+(s.side==="left"?6:-6),y,s.color)});
+ ctx.restore();tagSpots.length=0;
+}
+function secant(xq,yq,ca,col){let xp=0,yp=ca.fa,s=(yq-yp)/(xq-xp);line(-3,yp+s*(-3),3,yp+s*3,col,3);return s}
+function draw(){
+ if(stage===4||stage===6)return;
+ let ca=current();
+ const Lc=tok('--pz-butter-line'),Rc=tok('--pz-right'),Li=tok('--pz-butter-ink'),Ri=tok('--pz-lav-ink');
+ const qs=[];if(stage===1||stage===3)qs.push(-(stage===1?d:dl));if(stage===2||stage===3)qs.push(stage===2?d:dr);
+ tagAvoid=[{x:X(0),y:Y(ca.fa)}].concat(qs.map(x=>({x:X(x),y:Y(ca.f(x))})));
+ drawAxes();drawFunction(ca);
+ const secFn=(x0,y0)=>{const s=(y0-ca.fa)/x0;return x=>ca.fa+s*x};
+ if(stage===1){let x=-d,y=ca.f(x);secant(x,y,ca,Lc);tagFor(secFn(x,y),"← 왼쪽 할선",Li,"left",-0.15);drawTags();drawSpecial(ca);point(x,y,"move","Q₋",Li,-12,-14)}
+ else if(stage===2){let x=d,y=ca.f(x);secant(x,y,ca,Rc);tagFor(secFn(x,y),"오른쪽 할선 →",Ri,"right",0.15);drawTags();drawSpecial(ca);point(x,y,"move","Q₊",Ri,12,-14)}
+ else if(stage===3){let xl=-dl,yl=ca.f(xl),xr=dr,yr=ca.f(xr);secant(xl,yl,ca,Lc);secant(xr,yr,ca,Rc);tagFor(secFn(xl,yl),"← 왼쪽 할선",Li,"left",-0.15);tagFor(secFn(xr,yr),"오른쪽 할선 →",Ri,"right",0.15);drawTags();drawSpecial(ca);point(xl,yl,"move","Q₋",Li,-12,-14);point(xr,yr,"move","Q₊",Ri,12,-14)}
+ else {drawTags();drawSpecial(ca)}
+}
+function buildChecks(ca){
+ let cont=continuity(ca),diff=differentiable(ca);
+ $("badges").innerHTML=`<span class="badge ${cont?"good":"bad"}">${cont?"연속":"불연속"}</span><span class="badge ${diff?"good":"bad"}">${diff?"미분 가능":"미분 불가능"}</span>`;
+ let a=ca.ll===ca.rl,bv=a&&ca.rl===ca.fa, /* [버그수정] 극한값이 존재하지 않으면 '극한값 = 함숫값'도 ✗ */dv=ca.ld!==null&&ca.rd!==null&&Math.abs(ca.ld-ca.rd)<1e-9;
+ const ck=v=>v?"ok":"no"; // [2단계] ✓/✗ 줄에 색(민트/로즈)도 함께
+ $("checks").innerHTML=`<div class="checkline ${ck(a)}">${a?"✓":"✗"} 좌극한 = 우극한</div><div class="checkline ${ck(bv)}">${bv?"✓":"✗"} 극한값 = 함숫값</div><div class="checkline ${ck(dv)}">${dv?"✓":"✗"} 좌미분계수 = 우미분계수</div>`+(cont?"":`<div class="checkline"><strong>불연속인 점에서는 미분가능하지 않다 (미분가능 ⟹ 연속의 대우)</strong></div>`); // [2차수정] 교사 요청: 불연속일 때 판정 근거 한 줄
+}
+function table(ca){
+ let hs=[.5,.1,.01];let rows=hs.map(v=>{let l=(ca.f(-v)-ca.fa)/(-v),r=(ca.f(v)-ca.fa)/v;return `<tr><td>${v}</td><td>${fmt(l)}</td><td>${fmt(r)}</td></tr>`}).join("");
+ $("numtable").innerHTML=`<table><tr><th>d</th><th>왼쪽 평균변화율</th><th>오른쪽 평균변화율</th></tr>${rows}</table>`;
+}
+function compare(){
+ $("compareGrid").innerHTML="";
+ cases.forEach((ca,i)=>{let div=document.createElement("div");div.className="compare-card";div.innerHTML=`<canvas id="mini${i}" aria-label="${ca.name} 그래프"></canvas><h3>${ca.name}</h3><div class="badges"><span class="badge ${continuity(ca)?"good":"bad"}">${continuity(ca)?"연속":"불연속"}</span><span class="badge ${differentiable(ca)?"good":"bad"}">${differentiable(ca)?"미분 가능":"미분 불가능"}</span></div><div class="checks">f(0)=${fmt(ca.fa)}<br>좌극한=${fmt(ca.ll)}, 우극한=${fmt(ca.rl)}<br>좌미분계수=${fmt(ca.ld)}, 우미분계수=${fmt(ca.rd)}${continuity(ca)?"":"<br><strong>불연속인 점에서는 미분가능하지 않다 (미분가능 ⟹ 연속의 대우)</strong>"}</div>`;/* [2차수정] */$("compareGrid").appendChild(div);setTimeout(()=>drawMini($("mini"+i),ca),0)});
+ // [2단계] 조작 칸의 '한눈에 정리' 표 (같은 판정 함수 사용)
+ const yn=v=>v?`<span class="yes">✓ 예</span>`:`<span class="no">✗ 아니오</span>`;
+ $("quickTable").innerHTML=`<tr><th>사례</th><th>연속</th><th>미분 가능</th></tr>`+cases.map(ca=>`<tr><td>${ca.name}</td><td>${yn(continuity(ca))}</td><td>${yn(differentiable(ca))}</td></tr>`).join("");
+}
+function drawMini(can,ca){
+ // [2단계] zoom 반영 해상도, 테마 색, 구멍(○)·함숫값(●) 표시
+ let c=can.getContext("2d"),dp=(devicePixelRatio||1)*cssScale(can),W=can.clientWidth,H=can.clientHeight;if(!W)return;
+ can.width=Math.round(W*dp);can.height=Math.round(H*dp);c.setTransform(dp,0,0,dp,0,0);
+ let xx=x=>(x+2)/4*W,yy=y=>H-(y+2)/4*H;
+ c.fillStyle=tok('--pz-panel');c.fillRect(0,0,W,H);
+ c.strokeStyle=tok('--pz-grid');c.lineWidth=1;c.beginPath();for(let i=-1;i<=1;i+=2){c.moveTo(xx(i),0);c.lineTo(xx(i),H);c.moveTo(0,yy(i));c.lineTo(W,yy(i))}c.stroke();
+ c.strokeStyle=tok('--pz-axis');c.lineWidth=1.5;c.beginPath();c.moveTo(xx(0),0);c.lineTo(xx(0),H);c.moveTo(0,yy(0));c.lineTo(W,yy(0));c.stroke();
+ c.strokeStyle=tok('--pz-f');c.lineWidth=3;c.lineCap='round';c.lineJoin='round';c.beginPath();let st=false;
+ for(let i=0;i<=300;i++){let x=-2+4*i/300;if(ca.kind==="jump"&&Math.abs(x)<.01){st=false;continue}if(ca.kind==="hole"&&Math.abs(x)<.03){st=false;continue}let y=ca.f(x);if(!st){c.moveTo(xx(x),yy(y));st=true}else c.lineTo(xx(x),yy(y))}c.stroke();
+ const dot=(x,y,open)=>{c.beginPath();c.arc(xx(x),yy(y),5.5,0,Math.PI*2);c.lineWidth=3;c.fillStyle=open?'#fff':tok('--pz-point');c.strokeStyle=open?tok('--pz-f'):'#fff';c.fill();c.stroke()};
+ [ca.ll,ca.rl].filter((v,k,arr)=>v!==ca.fa&&arr.indexOf(v)===k).forEach(v=>dot(0,v,true));
+ dot(0,ca.fa,false);
+}
+function configure(){
+ let guides=[
+ ["연속성 확인","f(0), 좌극한, 우극한과 체크리스트를 한 번에 확인합니다."],
+ ["왼쪽 접근","거리 d를 줄이며 왼쪽 평균변화율(할선의 기울기)을 관찰합니다."],
+ ["오른쪽 접근","거리 d를 줄이며 오른쪽 평균변화율(할선의 기울기)을 관찰합니다."],
+ ["좌우 비교","좌우 거리를 따로 조절하거나 동시에 접근시킵니다."],
+ ["대표 사례 비교","네 사례를 카드로 비교합니다."],
+ ["조각함수 실험","계수와 조건 버튼을 사용합니다."],
+ ["관계 정리","벤다이어그램과 명제를 확인합니다."]
+ ][stage];$("controlTitle").textContent=guides[0];$("controlGuide").innerHTML=termify(guides[1]);
+ $("distanceBlock").classList.toggle("hidden",![1,2].includes(stage));
+ $("dualBlock").classList.toggle("hidden",stage!==3);
+ $("pieceBlock").classList.toggle("hidden",stage!==5);
+ $("metrics").classList.toggle("hidden",[4,6].includes(stage));
+ $("judgement").classList.toggle("hidden",[4,6].includes(stage));
+ $("casebar").classList.toggle("hidden",[4,5,6].includes(stage)); // [2단계] 5단계(카드 비교)에서는 사례 선택이 쓰이지 않아 숨김
+ $("canvaswrap").classList.toggle("hidden",[4,6].includes(stage));
+ $("legend").classList.toggle("hidden",[4,6].includes(stage));
+ document.querySelectorAll(".lgQ").forEach(e=>e.classList.toggle("hidden",![1,2,3].includes(stage)));
+ $("quickBlock").classList.toggle("hidden",stage!==4);
+ $("rulesBlock").classList.toggle("hidden",stage!==6);
+ // [2단계] 카드 비교·벤다이어그램 단계는 그림 칸이 길어 sticky를 끈다(화면보다 길면 아래가 잘리므로)
+ $("visual").classList.toggle("pz-sticky",![4,6].includes(stage));
+ $("compareGrid").style.display=stage===4?"grid":"none";
+ $("summary").style.display=stage===6?"block":"none";
+}
+function update(){
+ let s=stages[stage],ca=current();
+ $("kicker").textContent=`단계 ${stage+1} / 7`;$("stageTitle").textContent=s[0];$("stageText").innerHTML=termify(s[1]);$("formula").innerHTML=formulaHTML[stage];$("formula").setAttribute("aria-label",s[2]);
+ [...$("steps").children].forEach((x,i)=>{x.classList.toggle("active",i===stage);x.setAttribute("aria-selected",String(i===stage))});[...$("tabs").children].forEach((x,i)=>{x.classList.toggle("active",i===ci);x.setAttribute("aria-pressed",String(i===ci))});
+ $("bar").style.width=`${(stage+1)/7*100}%`;$("prev").disabled=stage===0;$("next").disabled=stage===6;
+ $("visualTitle").textContent=stage===4?"대표 사례 4개 비교":stage===5?"조각함수 조건 실험":stage===6?"연속성과 미분 가능성의 관계":ca.name;
+ $("visualSub").textContent=stage===4?"같은 기준으로 네 사례를 비교합니다.":stage===5?"x=0에서 연속성과 미분 가능성을 판정합니다.":stage===6?"포함 관계, 역과 대우, 반례를 함께 정리합니다.":ca.sub;
+ $("distanceValue").textContent=`d=${fmt(d)}`;$("distance").value=d;$("dlVal").textContent=fmt(dl);$("drVal").textContent=fmt(dr);$("dl").value=dl;$("dr").value=dr;
+ $("fa").textContent=fmt(ca.fa);$("ll").textContent=fmt(ca.ll);$("rl").textContent=fmt(ca.rl);$("ld").textContent=fmt(ca.ld);$("rd").textContent=fmt(ca.rd);
+ ["fa","ll","rl","ld","rd"].forEach(id=>$(id).classList.toggle("dne",$(id).textContent==="존재하지 않음")); // [2단계] 긴 '존재하지 않음'은 작은 글자로
+ $("mLD").classList.toggle("hidden",stage<1);$("mRD").classList.toggle("hidden",stage<2);$("mLL").classList.toggle("hidden",stage<0);$("mRL").classList.toggle("hidden",stage<0);
+ buildChecks(ca);table(ca);configure();if(stage===4)compare();draw();
+ // [2단계] 조각함수 미션: 직접 조절해서 미분 가능한 조건을 처음 찾으면 한 번 축하
+ if(stage===5&&pieceByHand&&differentiable(ca)&&window.PastelUI)PastelUI.celebrate('2-2-조각함수','🎉 미분 가능한 조건을 직접 찾았어요!');
+}
+function setStage(i){
+ clearInterval(timer);timer=null;stage=Math.max(0,Math.min(6,i));update();
+ // [2단계] 단계 전환: 패널을 부드럽게 + 레이아웃이 바뀐 뒤 다시 그리기
+ if(window.PastelUI){PastelUI.fade(document.querySelector('.info'));PastelUI.fade($("visual"));PastelUI.fade(document.querySelector('.controls'))}
+ requestAnimationFrame(resize);
+ // [2단계] 마지막 단계(관계 정리)에 처음 도착하면 한 번 축하
+ if(stage===6&&window.PastelUI)PastelUI.celebrate('2-2-관계정리','🎉 7단계까지 완료! 미분 가능 ⇒ 연속을 정리했어요.');
+}
+$("distance").oninput=e=>{d=+e.target.value;update()};$("half").onclick=()=>{d=Math.max(.02,d/2);update()};$("tenth").onclick=()=>{d=Math.max(.02,d/10);update()};$("resetD").onclick=()=>{d=1.5;update()};
+$("auto").onclick=()=>{clearInterval(timer);timer=setInterval(()=>{d=Math.max(.02,d*.84);update();if(d<=.021)clearInterval(timer)},80)};$("pause").onclick=()=>clearInterval(timer);
+$("dl").oninput=e=>{dl=+e.target.value;update()};$("dr").oninput=e=>{dr=+e.target.value;update()};$("same").onclick=()=>{dr=dl;update()};$("resetDl").onclick=()=>{dl=1;update()};$("resetDr").onclick=()=>{dr=1;update()};$("resetBoth").onclick=()=>{dl=1;dr=1;update()};
+$("bothAuto").onclick=()=>{clearInterval(timer);timer=setInterval(()=>{dl=Math.max(.02,dl*.84);dr=Math.max(.02,dr*.84);update();if(dl<=.021&&dr<=.021)clearInterval(timer)},80)};
+$("showTable").onclick=()=>{$("numtable").style.display=$("numtable").style.display==="block"?"none":"block"};
+function bindPieceControl(key){
+  const range=$(key+"Range"), num=$(key+"Num");
+  range.oninput=e=>{
+    const value=+e.target.value;
+    num.value=value;
+    if(key==="m")m=value;
+    if(key==="b")b=value;
+    if(key==="c")c=value;
+    pieceByHand=true;
+    update();
+  };
+  num.oninput=e=>{
+    let value=+e.target.value;
+    value=Math.max(-4,Math.min(4,value));
+    if(value!==+e.target.value) num.value=value; // [버그수정] 범위(-4~4) 밖 입력 시 칸에도 보정값 표시
+    range.value=value;
+    if(key==="m")m=value;
+    if(key==="b")b=value;
+    if(key==="c")c=value;
+    pieceByHand=true;
+    update();
+  };
+}
+["m","b","c"].forEach(bindPieceControl);
+$("resetM").onclick=()=>{m=1;$("mRange").value=$("mNum").value=m;update()};
+$("resetB").onclick=()=>{b=1;$("bRange").value=$("bNum").value=b;update()};
+$("resetC").onclick=()=>{c=-1;$("cRange").value=$("cNum").value=c;update()};
+document.querySelectorAll("[data-preset]").forEach(bt=>bt.onclick=()=>{let p=bt.dataset.preset;pieceByHand=false;if(p==="jump"){m=1;b=1;c=-1}else if(p==="cont"){c=b}else if(p==="contNotDiff"){b=c=1;m=2}else if(p==="diff"){b=c=1;m=0}else{m=1;b=1;c=-1}$("mRange").value=$("mNum").value=m;$("bRange").value=$("bNum").value=b;$("cRange").value=$("cNum").value=c;update()});
+$("prev").onclick=()=>setStage(stage-1);$("next").onclick=()=>setStage(stage+1);$("restart").onclick=()=>{clearInterval(timer);timer=null;/* [버그수정] 자동 접근 타이머 정지 + 조각함수 계수도 초기화 */m=1;b=1;c=-1;$("mRange").value=$("mNum").value=m;$("bRange").value=$("bNum").value=b;$("cRange").value=$("cNum").value=c;$("numtable").style.display="none";stage=0;ci=0;d=1.5;dl=dr=1;update();requestAnimationFrame(resize)};
+new ResizeObserver(()=>requestAnimationFrame(resize)).observe($("canvaswrap"));window.addEventListener("resize",resize);resize();update();
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>resize());
+})();
+</script>
+</body>
+</html>

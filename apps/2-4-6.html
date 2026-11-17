@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>수직선 위의 운동 · 속도와 가속도</title>
+<style>
+  /* [2단계 디자인] 공통 테마(복숭아 하늘) 적용. 글꼴·바탕은 테마(PZ 블록)가 정한다. */
+
+  /* 앱 고유 변수 → 테마 토큰 연결 (하드코딩 색 금지) */
+  :root {
+    --bg: var(--pz-bg);
+    --panel: var(--pz-panel);
+    --panelSoft: var(--pz-soft);
+    --border: var(--pz-line);
+    --borderSoft: var(--pz-line);
+    --textPrimary: var(--pz-ink);
+    --textMuted: var(--pz-muted);
+    --textFaint: var(--pz-muted);      /* 보조 글자는 --pz-muted 보다 옅게 쓰지 않는다 */
+    --accent: var(--pz-accent-btn);
+    --accentSoft: var(--pz-accent-soft);
+    --accentLine: var(--pz-line2);
+
+    /* 그래프 의미 색: 위치 = 주 함수(하늘), 속도 = 도함수(민트), 가속도 = 둘째 계열(라벤더) */
+    --xColor: var(--pz-f);     --xInk: var(--pz-sky-ink);
+    --vColor: var(--pz-deriv); --vInk: var(--pz-mint-ink);
+    --aColor: var(--pz-g);     --aInk: var(--pz-lav-ink);
+
+    /* 운동 방향(→ 오른쪽 / ← 왼쪽)과 속력 변화(▲ 증가 / ▼ 감소) */
+    --right: var(--pz-right);  --rightInk: var(--pz-lav-ink);
+    --left:  var(--pz-left);   --leftInk: var(--pz-sky-ink);
+    --stop:  var(--pz-muted);
+    --speedUp: var(--pz-up);   --speedUpInk: var(--pz-mint-ink);
+    --speedDown: var(--pz-down); --speedDownInk: var(--pz-rose-ink);
+
+    --trueColor: var(--pz-ok);
+    --falseColor: var(--pz-bad);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+
+  /* 한 줄 소개 + 탭 */
+  .tabs { margin-bottom: 16px; }
+  .tabBtn { white-space: nowrap; }
+
+  /* ===== 탭 패널: 1099px 이하 = [머리 → 그래프 → 조작 → 풀이] 한 줄,
+           1100px 이상 = 왼쪽 [머리·조작·풀이] + 오른쪽 그래프(sticky) ===== */
+  .tabPanel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .tabPanel > * { min-width: 0; margin: 0; }
+  @media (min-width: 1100px) {
+    .tabPanel.splitPanel {
+      grid-template-columns: minmax(340px, 1fr) minmax(0, 1.45fr);
+      grid-template-rows: auto auto auto 1fr;
+      grid-template-areas: "head graph" "ctrl graph" "sol graph" ". graph";
+      column-gap: 20px; align-items: start;
+    }
+    .splitPanel .aHead { grid-area: head; } .splitPanel .aCtrl { grid-area: ctrl; } .splitPanel .aSol { grid-area: sol; }
+    .splitPanel .aGraph { grid-area: graph; align-self: start; }
+  }
+
+  /* 카드 */
+  .card {
+    background: var(--pz-panel); border: 2px solid var(--pz-line); border-radius: var(--pz-r-lg);
+    padding: 18px 20px; box-shadow: var(--pz-shadow);
+  }
+  .softBox { background: var(--pz-soft); border-radius: var(--pz-r-md); padding: 12px 16px; }
+  .label { font-size: 15.5px; color: var(--pz-ink2); margin-bottom: 10px; font-weight: 600; line-height: 1.55; }
+
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  /* 숫자 입력칸 모양·포커스는 theme.css (폭은 .miniInput) */
+  .miniInput { width: 86px; flex: 0 0 auto; }
+
+  /* 버튼: 주 행동 = .pz-btn-primary, 보조 = .pz-btn-soft, 덜 중요 = .pz-btn-ghost (HTML에 클래스) */
+  .btnSm { padding: 9px 15px; font-size: 15px; }
+  .btnPlay.playing { background: var(--pz-ink2); box-shadow: 0 5px 0 var(--pz-ink); }
+
+  .sliderBlock:last-child { margin-bottom: 0; }
+  .slabel { font-size: 15.5px; color: var(--pz-ink2); }
+  input[type=range] { flex: 1; min-width: 0; }
+  .hint { font-size: 15px; color: var(--pz-muted); margin-top: 6px; line-height: 1.6; }
+
+  .eqDisplay { font-family: 'JetBrains Mono', var(--pz-mono); font-size: 20px; color: var(--xInk); font-weight: 700;
+    background: var(--pz-soft); border-radius: var(--pz-r-md); padding: 10px 16px; margin-bottom: 14px; overflow-wrap: anywhere; }
+  .eqDisplay.vColor { color: var(--vInk); }
+  .eqDisplay.aColor { color: var(--aInk); }
+
+  /* 그래프 카드 */
+  .graphCard { padding: 14px 16px 14px; }
+  /* 주의: 맨 canvas 선택자는 테마의 축하(컨페티) 캔버스까지 덮으므로 앱 캔버스 클래스로 한정 */
+  .chartCanvas, .missionCanvas, .galleryCanvas, .numlineCanvas { width: 100%; display: block; touch-action: none; background: var(--pz-panel); border-radius: var(--pz-r-sm); }
+  .graphFoot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .refitNote { font-size: 14px; font-weight: 600; color: var(--pz-warn-ink); background: var(--pz-warn-soft); border-radius: var(--pz-r-pill); padding: 4px 12px; display: none; }
+  .refitNote.show { display: inline-block; }
+
+  /* 접기 패널 (v·a 그래프) */
+  .collapseHeader { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%;
+    border: 0; background: transparent; padding: 0; cursor: pointer; text-align: left; color: var(--pz-ink);
+    font-family: var(--pz-font-title); font-weight: 400; font-size: 19px; }
+  .arrowIcon { color: var(--pz-muted); transition: transform .15s ease; font-size: 15px; font-family: var(--pz-font); }
+  .arrowIcon.open { transform: rotate(180deg); }
+  .collapseBody { padding-top: 12px; display: none; }
+
+  /* 수직선 */
+  .numlineBlock { margin-top: 12px; padding: 12px 14px; background: var(--pz-soft); border-radius: var(--pz-r-md); }
+  .numlineBlock .label { margin-bottom: 4px; }
+  .numlineCanvas { height: 84px; background: transparent; }
+  .numlineControls { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .numlineStatus { font-size: 16px; font-weight: 700; margin-left: auto; text-align: right; }
+  .numlineStatus::before, .statusLine::before { content: attr(data-sym); }
+
+  /* 탭3: 값 배지(한 줄) + 작은 그래프 3개 + t 슬라이더 */
+  .badgeRow { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .badge { flex: 1 1 0; min-width: 120px; border-radius: var(--pz-r-sm); padding: 6px 12px; background: var(--pz-soft);
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .badgeLabel { font-size: 14px; font-weight: 700; }
+  .badgeValue { font-family: 'JetBrains Mono', var(--pz-mono); font-size: 18px; font-weight: 700; }
+  .xInk { color: var(--xInk); } .vInk { color: var(--vInk); } .aInk { color: var(--aInk); }
+  .miniGap { height: 4px; }
+  .t3Scale { font-size: 13.5px; color: var(--pz-muted); text-align: right; margin-top: 2px; }
+  .tRow { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  .tRow input[type=range] { flex: 1 1 200px; }
+  .statusLine { margin-top: 10px; padding: 10px 14px; border-radius: var(--pz-r-md); background: var(--pz-soft);
+    font-size: 16px; font-weight: 700; color: var(--pz-ink); text-align: center; line-height: 1.45; }
+
+  /* 참·거짓 판단 카드 */
+  .propCard { background: var(--pz-panel); border: 2px solid var(--pz-line); border-radius: var(--pz-r-md); padding: 12px 14px; margin-bottom: 10px; }
+  .propCard:last-child { margin-bottom: 0; }
+  .propText { font-size: 16px; color: var(--pz-ink); line-height: 1.55; margin-bottom: 9px; font-weight: 600; }
+  .propAnswer { margin-top: 10px; }
+  .propBadge { display: inline-block; padding: 4px 12px; border-radius: var(--pz-r-pill); font-size: 14px; font-weight: 800; margin-bottom: 6px; }
+  .propTrue { background: var(--pz-ok-soft); color: var(--pz-ok-ink); }
+  .propFalse { background: var(--pz-bad-soft); color: var(--pz-bad-ink); }
+  .propTrue::before { content: "✓ "; }
+  .propFalse::before { content: "✗ "; }
+  .propExplain { font-size: 15px; color: var(--pz-ink2); line-height: 1.6; }
+
+  /* 탭2 안내 글자 (색 + ▲▼) */
+  .upInk { color: var(--speedUpInk); } .upInk::before { content: "▲ "; }
+  .downInk { color: var(--speedDownInk); } .downInk::before { content: "▼ "; }
+
+  /* 탭4 미션 */
+  .missionList { display: grid; gap: 16px; }
+  .missionTitle { font-family: var(--pz-font-title); font-weight: 400; font-size: 20px; color: var(--pz-ink); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .missionTitle .mono { font-family: 'JetBrains Mono', var(--pz-mono); font-size: 18px; color: var(--vInk); font-weight: 700; }
+  .doneTag { font-family: var(--pz-font); font-size: 14px; font-weight: 700; padding: 4px 12px; border-radius: var(--pz-r-pill);
+    color: var(--pz-muted); border: 2px dashed var(--pz-line2); }
+  .doneTag.done { color: var(--pz-ok-ink); background: var(--pz-ok-soft); border: 2px solid var(--pz-ok); }
+  .missionBody { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+  @media (min-width: 1100px) { .missionBody { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); } }
+
+  /* 탭5 유형 갤러리: 5장 = 넓은 화면 한 줄 / 중간 3+2(가운데) / 좁은 화면 2열(E는 한 줄 전체) */
+  .matchBanner { margin: 0 0 14px; }
+  .galleryGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 699px) { .galleryGrid .galleryCard:last-child:nth-child(odd) { grid-column: 1 / -1; } }
+  @media (min-width: 700px) {
+    .galleryGrid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .galleryGrid .galleryCard { grid-column: span 2; }
+    .galleryGrid .galleryCard:nth-child(4) { grid-column: 2 / span 2; }
+    .galleryGrid .galleryCard:nth-child(5) { grid-column: 4 / span 2; }
+  }
+  @media (min-width: 1100px) {
+    .galleryGrid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .galleryGrid .galleryCard:nth-child(n) { grid-column: auto; }
+  }
+  .galleryCard { border: 2px solid var(--pz-line); border-radius: var(--pz-r-md); padding: 10px 12px 12px; background: var(--pz-panel);
+    transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease; }
+  .galleryCard.match { border-color: var(--pz-accent); background: var(--pz-accent-soft); box-shadow: var(--pz-shadow-sm); }
+  .galleryCanvas { margin-bottom: 8px; }
+  .galleryName { font-size: 16px; font-weight: 700; color: var(--pz-ink); line-height: 1.4; }
+  .galleryCard.match .galleryName::after { content: "✓ 지금 내 운동"; display: block; color: var(--pz-accent-ink); font-size: 14px; }
+  .galleryDesc { font-size: 14px; color: var(--pz-muted); margin-top: 3px; line-height: 1.5; }
+
+  /* 격자 설정 (선생님용) */
+  .setCard { margin-top: 18px; padding: 14px 20px; }
+  .setCard summary { cursor: pointer; font-weight: 700; font-size: 15.5px; color: var(--pz-ink2); }
+  .ratioSel { width: 100%; max-width: 360px; font-family: inherit; font-size: 15px; padding: 9px 12px; border-radius: var(--pz-r-input);
+    border: 2px solid var(--pz-line); background: var(--pz-panel); color: var(--pz-ink); margin-top: 6px; }
+
+  /* 피드백 = .pz-feedback 모양 */
+  .feedback { border-radius: var(--pz-r-md); padding: 12px 14px; font-size: 15.5px; font-weight: 600; line-height: 1.55; }
+  .feedback.info { background: var(--pz-info-soft); color: var(--pz-info-ink); }
+
+  .tip { font-size: 15px; color: var(--pz-muted); margin-top: 18px; line-height: 1.65; }
+  .footer { text-align: center; font-size: 13px; color: var(--pz-muted); margin-top: 24px; }
+</style>
+<!-- PZ:HEAD -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../shared/theme.css">
+<script type="application/json" id="pz-meta">{"slug": "2-4-6", "unit": "2-4-6", "title": "속도와 가속도", "group": "도함수의 활용", "home": "../index.html", "guide": "../guides/2-4-6.html"}</script>
+<script id="pz-ui" src="../shared/ui.js"></script>
+<!-- /PZ:HEAD -->
+</head>
+<body>
+<div class="wrap pz-wrap" id="wrap">
+  <!-- [2단계] 상단 바가 단원·제목을 보여 주므로 앱 제목(h1)·눈썹 문구는 지우고 한 줄 소개만 남김.
+       앱 자체 '화면 설정'(글자 크기·좌표평면 가로/세로/최대 높이)은 상단 바(가/가+/가++)와 자동 크기 맞춤으로 대신함.
+       '격자 비율'만 맨 아래 선생님용 설정으로 남김. -->
+  <p class="desc pz-desc">위치함수 x(t)를 직접 만들어보고, 그로부터 유도되는 <span class="pz-term" data-tip="속도">속도</span> v(t)·<span class="pz-term" data-tip="가속도">가속도</span> a(t)를 관찰하며 운동 상태(정지·방향전환·가속·감속)를 읽는 연습을 해봅시다.</p>
+
+  <div class="tabs pz-tabs" role="tablist">
+    <button class="tabBtn pz-tab active" id="tabBtn1" onclick="showTab(1)" role="tab" aria-selected="true">1. 위치 → 속도</button>
+    <button class="tabBtn pz-tab" id="tabBtn2" onclick="showTab(2)" role="tab" aria-selected="false">2. 속도 → 가속도</button>
+    <button class="tabBtn pz-tab" id="tabBtn3" onclick="showTab(3)" role="tab" aria-selected="false">3. 순간 판독</button>
+    <!-- [2단계·교사 결정] '4.왕복미션' → '4. 방향 전환 미션' -->
+    <button class="tabBtn pz-tab" id="tabBtn4" onclick="showTab(4)" role="tab" aria-selected="false">4. 방향 전환 미션</button>
+    <button class="tabBtn pz-tab" id="tabBtn5" onclick="showTab(5)" role="tab" aria-selected="false">5. 유형 갤러리</button>
+  </div>
+
+  <!-- ================= TAB 1 : 위치 → 속도 ================= -->
+  <div id="tab1" class="tabPanel splitPanel">
+    <section class="card aHead">
+      <div class="label">위치함수 x(t)의 계수를 조절해보세요 (3차함수, 0≤t≤6)</div>
+      <div class="eqDisplay" id="xEq1" style="margin-bottom:0">x(t) = t³ − 6t² + 9t</div>
+    </section>
+
+    <section class="card graphCard aGraph pz-sticky">
+      <canvas id="xChart1" class="chartCanvas" width="700" height="260" aria-label="위치 x(t) 그래프"></canvas>
+      <div class="graphFoot">
+        <div class="hint" style="margin:0">🤏 드래그로 이동 · 휠/두 손가락으로 확대·축소 <span class="refitNote" id="refitNote1">↕ 곡선이 벗어나 보기를 다시 맞췄어요</span></div>
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="resetXView1()">↺ 보기 초기화</button>
+      </div>
+
+      <div class="numlineBlock">
+        <div class="label">수직선 위를 움직이는 점 — 속도의 부호가 방향을 결정합니다</div>
+        <canvas id="numline1" class="numlineCanvas" aria-label="수직선 위를 움직이는 점"></canvas>
+        <div class="numlineControls">
+          <button class="btnPlay pz-btn pz-btn-primary btnSm" id="playBtn1" onclick="toggleAnim1()">▶ 재생</button>
+          <button class="btnReset2 pz-btn pz-btn-ghost btnSm" onclick="animReset1()">↺ 처음부터</button>
+          <span class="numlineStatus" id="numlineStatus1"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card aCtrl">
+      <div class="sliderBlock pz-slider-block">
+        <div class="sliderTop pz-slider-top"><span class="slabel"><span class="sym pz-sym">a</span> t³의 계수</span></div>
+        <div class="sliderRow pz-slider-row">
+          <input type="range" id="sliderA" min="-2" max="2" step="0.1" value="1">
+          <input type="number" id="numA" class="miniInput" step="0.1" value="1">
+        </div>
+        <div class="hint">클수록 그래프 양 끝(초반·후반)이 더 급격하게 휘어집니다.</div>
+      </div>
+      <div class="sliderBlock pz-slider-block">
+        <div class="sliderTop pz-slider-top"><span class="slabel"><span class="sym pz-sym">b</span> t²의 계수</span></div>
+        <div class="sliderRow pz-slider-row">
+          <input type="range" id="sliderB" min="-8" max="8" step="0.1" value="-6">
+          <input type="number" id="numB" class="miniInput" step="0.1" value="-6">
+        </div>
+      </div>
+      <div class="sliderBlock pz-slider-block">
+        <div class="sliderTop pz-slider-top"><span class="slabel"><span class="sym pz-sym">c</span> t의 계수</span></div>
+        <div class="sliderRow pz-slider-row">
+          <input type="range" id="sliderC" min="-12" max="12" step="0.1" value="9">
+          <input type="number" id="numC" class="miniInput" step="0.1" value="9">
+        </div>
+        <div class="hint">t=0일 때(출발 순간)의 <span class="pz-term" data-tip="속도">속도</span>와 같습니다. v(0) = c 이기 때문이죠.</div>
+      </div>
+      <div class="sliderBlock pz-slider-block">
+        <div class="sliderTop pz-slider-top"><span class="slabel"><span class="sym pz-sym">d</span> 상수항</span></div>
+        <div class="sliderRow pz-slider-row">
+          <input type="range" id="sliderD" min="-8" max="8" step="0.1" value="0">
+          <input type="number" id="numD" class="miniInput" step="0.1" value="0">
+        </div>
+        <div class="hint">t=0일 때의 출발 위치입니다.</div>
+      </div>
+      <div class="pz-reset-row"><button class="pz-btn pz-btn-ghost btnSm" onclick="resetCoefValues()">↺ 처음 값으로</button></div>
+    </section>
+
+    <section class="card aSol">
+      <button type="button" class="collapseHeader" onclick="toggleCollapse('vGraph1')">
+        <span>📐 여기서 유도되는 v(t) 그래프 보기</span>
+        <span class="arrowIcon" id="arrow-vGraph1">▾</span>
+      </button>
+      <div class="collapseBody" id="body-vGraph1">
+        <div class="eqDisplay vColor" id="vEq1">v(t) = 3t² − 12t + 9</div>
+        <canvas id="vChart1" class="chartCanvas" width="700" height="260" aria-label="속도 v(t) 그래프"></canvas>
+        <div class="graphFoot">
+          <div class="hint" style="margin:0">🤏 드래그로 이동 · 휠로 확대·축소</div>
+          <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="resetVView1()">↺ 보기 초기화</button>
+        </div>
+        <div class="hint" style="margin-top:10px">v(t)가 양수인 구간에서는 오른쪽으로, 음수인 구간에서는 왼쪽으로 움직입니다. v(t)=0이 되는 순간이 방향이 바뀌는(혹은 잠깐 멈추는) 순간입니다.</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= TAB 2 : 속도 → 가속도 ================= -->
+  <div id="tab2" class="tabPanel splitPanel" style="display:none">
+    <section class="card aHead">
+      <div class="label">방금 만든 위치함수에서 유도된 속도함수 v(t)</div>
+      <div class="eqDisplay vColor" id="vEq2">v(t) = 3t² − 12t + 9</div>
+      <div class="softBox">
+        <div class="label" style="margin-bottom:6px">가속 vs 감속, 헷갈리지 않으려면</div>
+        <div class="hint" style="font-size:15px;line-height:1.75;margin:0;color:var(--pz-ink2)">
+          · <b class="upInk">가속(<span class="pz-term" data-tip="속력">속력</span>이 커짐)</b>: <span class="pz-term" data-tip="속도">속도</span> v와 <span class="pz-term" data-tip="가속도">가속도</span> a의 부호가 <b>같을 때</b><br>
+          · <b class="downInk">감속(속력이 작아짐)</b>: 속도 v와 가속도 a의 부호가 <b>다를 때</b><br>
+          · 가속도의 부호만 보고 "가속/감속"을 판단하면 안 됩니다 — 반드시 속도의 부호와 함께 비교해야 해요.
+        </div>
+      </div>
+    </section>
+
+    <section class="card graphCard aGraph pz-sticky">
+      <canvas id="vChart2" class="chartCanvas" width="700" height="260" aria-label="속도 v(t) 그래프"></canvas>
+      <div class="graphFoot">
+        <div class="hint" style="margin:0">🤏 드래그로 이동 · 휠/두 손가락으로 확대·축소 <span class="refitNote" id="refitNote2">↕ 곡선이 벗어나 보기를 다시 맞췄어요</span></div>
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="resetVView2()">↺ 보기 초기화</button>
+      </div>
+
+      <div class="numlineBlock">
+        <div class="label">이번엔 가속도에 주목해보세요 — 속도와 가속도의 부호가 같으면 가속, 다르면 감속입니다</div>
+        <canvas id="numline2" class="numlineCanvas" aria-label="수직선 위를 움직이는 점 (가속·감속)"></canvas>
+        <div class="numlineControls">
+          <button class="btnPlay pz-btn pz-btn-primary btnSm" id="playBtn2" onclick="toggleAnim2()">▶ 재생</button>
+          <button class="btnReset2 pz-btn pz-btn-ghost btnSm" onclick="animReset2()">↺ 처음부터</button>
+          <span class="numlineStatus" id="numlineStatus2"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card aCtrl">
+      <button type="button" class="collapseHeader" onclick="toggleCollapse('aGraph2')">
+        <span>📐 여기서 유도되는 a(t) 그래프 보기</span>
+        <span class="arrowIcon" id="arrow-aGraph2">▾</span>
+      </button>
+      <div class="collapseBody" id="body-aGraph2">
+        <div class="eqDisplay aColor" id="aEq2">a(t) = 6t − 12</div>
+        <canvas id="aChart2" class="chartCanvas" width="700" height="260" aria-label="가속도 a(t) 그래프"></canvas>
+        <div class="graphFoot">
+          <div class="hint" style="margin:0">🤏 드래그로 이동 · 휠로 확대·축소</div>
+          <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="resetAView2()">↺ 보기 초기화</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= TAB 3 : 순간 판독 ================= -->
+  <!-- [2단계] x·v·a 작은 그래프 3개와 t 슬라이더를 한 카드에 모아, 1440×900에서 한 화면에 보이게 함 -->
+  <div id="tab3" class="tabPanel splitPanel" style="display:none">
+    <section class="card aHead">
+      <div class="label" style="margin-bottom:0">시간 t를 스캔하며 순간의 위치·<span class="pz-term" data-tip="속도">속도</span>·<span class="pz-term" data-tip="가속도">가속도</span>를 읽어보세요</div>
+    </section>
+
+    <section class="card graphCard aGraph pz-sticky">
+      <div class="badgeRow">
+        <div class="badge"><span class="badgeLabel xInk">위치 x(t)</span><span class="badgeValue xInk" id="badgeX"></span></div>
+        <div class="badge"><span class="badgeLabel vInk">속도 v(t)</span><span class="badgeValue vInk" id="badgeV"></span></div>
+        <div class="badge"><span class="badgeLabel aInk">가속도 a(t)</span><span class="badgeValue aInk" id="badgeA"></span></div>
+      </div>
+      <canvas id="xMini3" class="missionCanvas" width="700" height="130" aria-label="위치 x(t) 그래프"></canvas>
+      <div class="miniGap"></div>
+      <canvas id="vMini3" class="missionCanvas" width="700" height="130" aria-label="속도 v(t) 그래프"></canvas>
+      <div class="miniGap"></div>
+      <canvas id="aMini3" class="missionCanvas" width="700" height="130" aria-label="가속도 a(t) 그래프"></canvas>
+      <div class="t3Scale" id="t3Scale"></div>
+      <div class="tRow">
+        <span class="slabel"><span class="sym pz-sym">t</span> 시각</span>
+        <input type="range" id="sliderT3" min="0" max="6" step="0.1" value="0">
+        <input type="number" id="numT3" class="miniInput" step="0.1" value="0">
+        <button class="btnPlay pz-btn pz-btn-primary btnSm" id="playBtn3" onclick="toggleAnim3()">▶ 자동 스캔</button>
+        <button class="btnReset2 pz-btn pz-btn-ghost btnSm" onclick="animReset3()">↺ 처음부터</button>
+      </div>
+      <div class="statusLine" id="statusLine3"></div>
+    </section>
+
+    <section class="card aCtrl">
+      <h3 class="cardTitle pz-card-head">🔎 지금 이 순간(슬라이더 위치)에 대해 판단해보세요</h3>
+      <div class="propCard">
+        <div class="propText">지금 이 순간, 물체는 정지해 있다.</div>
+        <button class="propRevealBtn pz-btn pz-btn-soft btnSm" onclick="revealDynamicProp(this,'stop')">정답 확인</button>
+        <div class="propAnswer" style="display:none"></div>
+      </div>
+      <div class="propCard" id="propAccelCard">
+        <div class="propText" id="propAccelText">지금 이 순간, 물체는 가속하고 있다 (속력이 커지고 있다).</div>
+        <button class="propRevealBtn pz-btn pz-btn-soft btnSm" onclick="revealDynamicProp(this,'accel')">정답 확인</button>
+        <div class="propAnswer" style="display:none"></div>
+      </div>
+      <div class="propCard">
+        <div class="propText">지금 이 순간, 물체는 왼쪽(음의 방향)으로 움직이고 있다.</div>
+        <button class="propRevealBtn pz-btn pz-btn-soft btnSm" onclick="revealDynamicProp(this,'left')">정답 확인</button>
+        <div class="propAnswer" style="display:none"></div>
+      </div>
+      <div class="hint" style="margin-top:10px">슬라이더를 옮긴 뒤 다시 눌러도 그 순간 기준으로 새로 판정됩니다.</div>
+    </section>
+  </div>
+
+  <!-- ================= TAB 4 : 방향 전환 미션 ================= -->
+  <div id="tab4" class="tabPanel" style="display:none">
+    <section class="card">
+      <div class="label" style="margin-bottom:0">아래는 세 가지 물체의 <span class="pz-term" data-tip="속도">속도</span>-시간 그래프 v(t)입니다 (0≤t≤6). 그래프만 보고 운동 상태를 판단해보세요.</div>
+    </section>
+    <div class="missionList">
+      <section class="card">
+        <div class="missionTitle">미션 A <span class="mono">v(t) = t − 3</span> <span class="doneTag" id="doneTagA">세 문항 확인하기</span></div>
+        <div class="missionBody">
+          <canvas id="missionA" class="missionCanvas" width="700" height="130" aria-label="미션 A 속도 그래프"></canvas>
+          <div id="missionAProps"></div>
+        </div>
+      </section>
+      <section class="card">
+        <div class="missionTitle">미션 B <span class="mono">v(t) = −2t + 8</span> <span class="doneTag" id="doneTagB">세 문항 확인하기</span></div>
+        <div class="missionBody">
+          <canvas id="missionB" class="missionCanvas" width="700" height="130" aria-label="미션 B 속도 그래프"></canvas>
+          <div id="missionBProps"></div>
+        </div>
+      </section>
+      <section class="card">
+        <div class="missionTitle">미션 C <span class="mono">v(t) = t² − 4</span> <span class="doneTag" id="doneTagC">세 문항 확인하기</span></div>
+        <div class="missionBody">
+          <canvas id="missionC" class="missionCanvas" width="700" height="130" aria-label="미션 C 속도 그래프"></canvas>
+          <div id="missionCProps"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ================= TAB 5 : 유형 갤러리 ================= -->
+  <div id="tab5" class="tabPanel" style="display:none">
+    <section class="card">
+      <div class="label">지금 탭1에서 만든 운동은 어떤 유형에 가까울까요?</div>
+      <div class="matchBanner feedback info" id="matchBanner"></div>
+      <div class="galleryGrid">
+        <div class="galleryCard" id="galleryA">
+          <canvas id="galleryCanvasA" class="galleryCanvas" width="340" height="110" aria-label="A 유형 속도 그래프"></canvas>
+          <div class="galleryName">A. 등속 운동</div>
+          <div class="galleryDesc">속도가 일정 (a=0)</div>
+        </div>
+        <div class="galleryCard" id="galleryB">
+          <canvas id="galleryCanvasB" class="galleryCanvas" width="340" height="110" aria-label="B 유형 속도 그래프"></canvas>
+          <div class="galleryName">B. 등가속도 운동</div>
+          <div class="galleryDesc">속도가 일정하게 변함 (a 상수≠0)</div>
+        </div>
+        <div class="galleryCard" id="galleryC">
+          <canvas id="galleryCanvasC" class="galleryCanvas" width="340" height="110" aria-label="C 유형 속도 그래프"></canvas>
+          <div class="galleryName">C. 속력이 늘었다 줄었다</div>
+          <div class="galleryDesc">방향은 안 바뀌고, 속력이 커지다가 작아지거나 작아지다가 커짐</div>
+        </div>
+        <div class="galleryCard" id="galleryD">
+          <canvas id="galleryCanvasD" class="galleryCanvas" width="340" height="110" aria-label="D 유형 속도 그래프"></canvas>
+          <div class="galleryName">D. 운동 방향이 바뀌는 운동</div>
+          <div class="galleryDesc">중간에 방향이 바뀜 (v의 부호가 바뀜)</div>
+        </div>
+        <!-- [2차 수정·교사 답변] x=t³처럼 방향이 안 바뀌고 속력이 한쪽으로만 변하는(a는 일정하지 않은) 운동을 C와 구분 -->
+        <div class="galleryCard" id="galleryE">
+          <canvas id="galleryCanvasE" class="galleryCanvas" width="340" height="110" aria-label="E 유형 속도 그래프"></canvas>
+          <div class="galleryName">E. 속력이 한쪽으로만 변하는 운동</div>
+          <div class="galleryDesc">방향은 안 바뀌고 속력이 계속 커지거나 계속 작아짐 (a는 일정하지 않음)</div>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:12px">작은 그래프는 각 유형의 속도 v(t) 예시입니다. 탭1에서 계수 a, b, c, d를 바꾸면 이 화면으로 돌아왔을 때 매칭되는 유형이 달라집니다.</div>
+    </section>
+  </div>
+
+  <p class="tip">Tip. 탭1에서 계수를 바꿔가며 v(t) 그래프가 어떻게 달라지는지, 탭3에서 슬라이더로 순간순간을 짚어가며 부호를 확인해보세요.</p>
+
+  <!-- [2단계] 화면 설정 중 '격자 비율'만 남김 (글자 크기·그래프 크기는 상단 바와 자동 맞춤이 대신함) -->
+  <details class="card setCard">
+    <summary>⚙️ 그래프 격자 설정 (선생님용)</summary>
+    <div class="sliderTop pz-slider-top" style="margin-top:12px"><span class="slabel">격자 한 칸의 비율 (가로 1 : 세로)</span></div>
+    <select id="selRatio" class="ratioSel">
+      <option value="1">1 : 1</option>
+      <option value="2">1 : 2</option>
+      <option value="5" selected>1 : 5</option>
+      <option value="10">1 : 10</option>
+      <option value="20">1 : 20</option>
+      <option value="50">1 : 50</option>
+      <option value="0">자동 (화면에 맞춤)</option>
+    </select>
+    <div class="hint">격자 한 칸은 항상 정사각형이고, 이 값은 한 칸이 <b>얼마를 뜻하는지</b>를 정합니다. 그래프 오른쪽 위 <b>□ 배지</b>가 지금 한 칸의 값(가로 = 시간, 세로 = 위치·속도·가속도)을 알려 줍니다. 정한 비율로는 그래프가 한 화면에 다 들어가지 않으면 1:10, 1:20…으로 자동 완화하고, 배지에 <b>‘자동’</b>이라고 표시합니다.</div>
+  </details>
+  <p class="footer">✏️ made by 지인섭</p>
+</div>
+
+<script>
+/* ================= Graph engine (forked: adjustable height via GRAPH_HEIGHT / heightOverride) ================= */
+let GRAPH_HEIGHT = 260;
+
+/* [2단계] 테마 색 읽기: 그래프 의미 색은 모두 --pz-* 토큰에서 (PastelUI.color).
+   PastelUI가 아직 없을 때를 대비해 CSS 변수를 직접 읽는 대체 경로를 둔다. */
+function tok(name){
+  if (window.PastelUI) return PastelUI.color(name);
+  let v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(), g = 0;
+  while (/^var\(/.test(v) && g++ < 6) v = getComputedStyle(document.documentElement).getPropertyValue(v.replace(/^var\(\s*|\s*\)$/g,'')).trim();
+  return v || '#888';
+}
+/* [2단계] 화면 확대 비율: #pz-main 의 CSS zoom 때문에 getBoundingClientRect(화면 px)와
+   clientWidth(CSS px)가 다르다. 둘의 비율을 직접 재면 zoom 값을 몰라도 정확하다. */
+function cssScale(el){
+  const r = el.getBoundingClientRect();
+  return (el.clientWidth > 0 && r.width > 0) ? r.width / el.clientWidth : 1;
+}
+/* [2단계] 그래프 여백: 그리기(drawLineChart)·드래그(attachPanZoom)·높이 맞춤(computeFitPlan)이 같은 값을 쓴다 */
+const CHART_PAD = { l:46, r:14, t:32, b:26 };   // t: 위쪽 여백에 □ 격자 배지를 둠 (곡선·이름표를 가리지 않게)
+const CHART_FONT = '"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+const SPLIT_MQ = window.matchMedia('(min-width: 1100px)');
+/* [2단계] 흰 테두리(halo)를 두른 글자 — 곡선 위에 겹쳐도 읽히게 */
+function haloText(ctx, text, x, y, color){
+  ctx.save();
+  ctx.lineJoin = 'round'; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = color; ctx.fillText(text, x, y);
+  ctx.restore();
+}
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath(); ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath();
+}
+
+/* ===== [2단계] 그래프 높이: 화면 안에 들어가게 =====
+   예전에는 격자 비율(1:5 등)을 지키려고 그래프 세로가 2000px 넘게 길어졌다(탭3·4).
+   이제는 그래프마다 '쓸 수 있는 높이'를 화면에서 재고, 그 안에 들어가도록 격자 비율만 자동 완화한다. */
+function availH(){                        // 상단 바 아래 남은 화면 높이 (#pz-main 의 CSS px)
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pz-avail-h'));
+  if (isFinite(v) && v > 0) return v;
+  return window.innerHeight - 64;
+}
+function topbarCssH(){ const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pz-topbar-h')); return isFinite(v) ? v : 64; }
+/* 그래프 카드(.card) 안 캔버스들이 함께 쓸 수 있는 높이.
+   1100px 이상(스플릿, sticky): 처음 화면(스크롤 0)과 sticky 상태 모두에서 카드 전체가 보이게.
+   1099px 이하(한 줄): 카드 하나가 한 화면에 들어가게, 폭에 비해 너무 길지 않게. */
+function cardBudget(canvas, list){
+  const card = canvas.closest('.card');
+  if (!card || card.offsetParent === null) return 420;
+  const k = cssScale(card), avail = availH();
+  const vh = window.innerHeight / k;
+  const cr = card.getBoundingClientRect();
+  let ch = 0; list.forEach(c => { if (c) ch += c.getBoundingClientRect().height; });
+  const chrome = (cr.height - ch) / k;                       // 카드 안 캔버스 외 높이(여백·안내줄·수직선 등)
+  const bar = document.querySelector('.pz-topbar');
+  const barScreen = bar ? bar.offsetHeight : 64;
+  if (SPLIT_MQ.matches){
+    const top0 = (cr.top + window.scrollY - barScreen) / k;   // 스크롤 0일 때 상단 바 아래에서 카드 위끝까지
+    const fitFirst = avail - Math.min(top0, avail * 0.4) - chrome - 14;
+    const fitSticky = vh - (topbarCssH() + 12) - chrome - 14;  // sticky top = 상단 바 + 12px (zoom 안)
+    return Math.min(fitFirst, fitSticky);
+  }
+  return Math.min(avail - chrome - 24, (canvas.clientWidth || 700) * 0.8 * list.length);
+}
+const MINI_MIN_H = 110;
+function chartBudget(canvas){
+  if (!canvas) return 420;
+  const id = canvas.id;
+  if (id === 'xChart1' || id === 'vChart2'){
+    const b = cardBudget(canvas, [canvas]);
+    // 한 줄 배치(1099px 이하)에서는 그래프 아래 계수 슬라이더가 너무 멀어지지 않게 화면 높이의 절반 정도로
+    return Math.max(240, SPLIT_MQ.matches ? b : Math.min(b, availH() * 0.5));
+  }
+  if (/^(x|v|a)Mini3$/.test(id)){
+    const list = ['xMini3','vMini3','aMini3'].map(i => document.getElementById(i));
+    return Math.max(MINI_MIN_H, Math.floor(cardBudget(canvas, list) / 3));
+  }
+  if (/^mission/.test(id)) return Math.round(Math.min(340, Math.max(220, availH() * 0.42)));
+  return Math.round(Math.min(460, Math.max(240, availH() * 0.6)));   // 접기 패널 안 그래프
+}
+
+/* "nice" round step size (1/2/5 × 10^n) for a given range and target tick count */
+function niceStepNearest(v){ return niceStep(v, 1); }
+function niceStep(range, targetTicks){
+  const raw = range / Math.max(1, targetTicks);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  let step;
+  if (norm < 1.5) step = 1;
+  else if (norm < 3) step = 2;
+  else if (norm < 7) step = 5;
+  else step = 10;
+  return step * mag;
+}
+/* array of nice tick values covering [min,max] */
+function niceTicks(min, max, targetTicks){
+  const step = niceStep(max - min, targetTicks);
+  const start = Math.ceil((min - 1e-9) / step) * step;
+  const ticks = [];
+  for (let v = start; v <= max + 1e-9; v += step) ticks.push(Math.round(v / step) * step);
+  if (ticks.length === 0) ticks.push(Math.round(((min + max) / 2) / step) * step);
+  return { values: ticks, step };
+}
+function formatTickLabel(v, step){
+  const s = step ?? 1;
+  const decimals = s < 1 ? Math.max(1, Math.ceil(-Math.log10(s))) : 0;
+  const out = v.toFixed(decimals);
+  return (out === '-0' || out === '-0.0') ? out.slice(1) : out;
+}
+
+/* smallest "nice" step (1/2/5 x 10^n) that is >= v */
+function niceStepAtLeast(v){
+  v = Math.abs(v) || 1e-9;
+  const mag = Math.pow(10, Math.floor(Math.log10(v)));
+  const norm = v / mag;
+  let s;
+  if (norm <= 1.0000001) s = 1;
+  else if (norm <= 2.0000001) s = 2;
+  else if (norm <= 5.0000001) s = 5;
+  else s = 10;
+  return s * mag;
+}
+function ticksFromStep(min, max, step){
+  const start = Math.ceil((min - 1e-9) / step) * step;
+  const values = [];
+  for (let v = start; v <= max + 1e-9; v += step) values.push(Math.round(v / step) * step);
+  if (values.length === 0) values.push(Math.round(((min + max) / 2) / step) * step);
+  return { values, step };
+}
+
+/* ===== grid squaring =====
+   The x range is kept exactly as given, its cell pixel size is measured, and the
+   y step is chosen (and the y range gently widened) so that a grid cell is EXACTLY
+   square in pixels. Cell values may still differ (1 cell = 0.5s across, 10 up), which
+   is unavoidable when the axes carry different quantities - so the cell scale is
+   printed in the chart corner.
+   The cell RATIO (가로 1 : 세로 R) is a setting; the chart height grows in whole
+   cells to fit the curve, and the ratio is only coarsened when that would exceed
+   the height available on screen. */
+const CELL_PX = 62;
+/* allowed "세로칸 값 / 가로칸 값" ratios (nice 1-2-5 ladder) */
+const RATIO_LADDER = [1,2,5,10,20,50,100,200,500,1000,2000,5000,10000];
+/* smallest ladder ratio that is >= both the user's choice and the ratio actually
+   needed to show the whole y range at this canvas height (so nothing is ever cut) */
+function effectiveRatio(xSpan, ySpan, plotW, plotH){
+  const need = (ySpan * plotW) / (xSpan * plotH) * 0.995;
+  const req = (uiSettings && uiSettings.cellRatio) || 0;   // 0 = 자동
+  for (const r of RATIO_LADDER) if (r >= need - 1e-9 && r >= req) return r;
+  return Math.max(need, req);
+}
+/* Grid cells are always exactly square in pixels. The RATIO fixes what one cell is
+   WORTH (가로 1 : 세로 R); the number of vertical cells (i.e. the chart height) is
+   what grows to fit the curve. */
+function fitGridView(v, plotW, plotH){
+  const xMin = v.xMin, xMax = v.xMax, yMin = v.yMin, yMax = v.yMax;
+  const xSpan = (xMax - xMin) || 1, ySpan = (yMax - yMin) || 1;
+  const cy = (yMin + yMax) / 2;
+
+  /* A view that has already been fitted carries its resolved ratio, so panning and
+     zooming keep that ratio instead of re-deriving (and coarsening) it every frame. */
+  const R = (v.ratio && isFinite(v.ratio)) ? v.ratio : effectiveRatio(xSpan, ySpan, plotW, plotH);
+  const cellTarget = v.cellPx || CELL_PX;
+  const stepX = niceStepNearest(xSpan / Math.max(3, Math.round(plotW / cellTarget)));
+  const cellPx = plotW * stepX / xSpan;          // px per cell (square)
+  const stepY = R * stepX;
+  const newYSpan = plotH * stepY / cellPx;       // >= ySpan by construction of R
+  return { xMin, xMax, yMin: cy - newYSpan/2, yMax: cy + newYSpan/2,
+           stepX, stepY, ratio: R, square: (Math.abs(R-1) < 1e-9) };
+}
+function stepLabel(v){
+  const a = Math.abs(v);
+  const d = a >= 1 ? 0 : Math.max(1, Math.ceil(-Math.log10(a)));
+  return v.toFixed(d);
+}
+
+/* curves[i] = { fn, color, width, alpha, dash,
+                 tag:'이름표'(선 오른쪽 끝 근처), tagColor,
+                 domain:[t0,t1] (이 구간 밖은 흐린 점선으로),
+                 marker:{x,y} (움직이는 점 + 세로 안내선) }
+   opts = { ratio, minor, reqRatio(사용자가 정한 비율: 배지의 '자동' 표시용), noBadge } */
+function drawLineChart(canvas, xMin, xMax, yMin, yMax, curves, xTickFn, gapThreshold, heightOverride, opts) {
+  const cssW = canvas.clientWidth || 700, cssH = Math.round(heightOverride || GRAPH_HEIGHT);
+  /* fixed-height canvases: pin the displayed height to the drawn height */
+  canvas.style.height = cssH + 'px';
+  // [2단계] 글자 크기(zoom)만큼 화면에서 커지므로 그만큼 해상도를 올려 선명하게
+  const dpr = (window.devicePixelRatio || 1) * cssScale(canvas);
+  canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const noBadge = !!(opts && opts.noBadge);
+  const padL = CHART_PAD.l, padR = CHART_PAD.r;
+  const padT = (opts && opts.padT != null) ? opts.padT : (noBadge ? 12 : CHART_PAD.t);
+  const padB = (opts && opts.padB != null) ? opts.padB : CHART_PAD.b;
+  const hideX = !!(opts && opts.hideXLabels);
+  const plotW = Math.max(1,cssW - padL - padR), plotH = Math.max(1,cssH - padT - padB);
+
+  /* square up the grid before anything is measured or drawn */
+  const grid = fitGridView({ xMin, xMax, yMin, yMax, ratio: opts && opts.ratio, cellPx: opts && opts.cellPx }, plotW, plotH);
+  xMin = grid.xMin; xMax = grid.xMax; yMin = grid.yMin; yMax = grid.yMax;
+
+  function xPix(x){ return padL + (x-xMin)/(xMax-xMin)*plotW; }
+  function yPix(y){ return padT + (1-(y-yMin)/(yMax-yMin))*plotH; }
+
+  const xt = ticksFromStep(xMin, xMax, grid.stepX);
+  const yt = ticksFromStep(yMin, yMax, grid.stepY);
+  const gridCol = tok('--pz-grid');
+
+  /* optional finer sub-grid: same square cells, split n-ways, labels stay on the
+     "nice" major lines only */
+  const minorDiv = (opts && opts.minor) || 1;
+  if (minorDiv > 1){
+    ctx.save(); ctx.strokeStyle = gridCol; ctx.globalAlpha = 0.45; ctx.lineWidth = 1;
+    ticksFromStep(xMin, xMax, grid.stepX/minorDiv).values.forEach(x=>{
+      ctx.beginPath(); ctx.moveTo(xPix(x),padT); ctx.lineTo(xPix(x),padT+plotH); ctx.stroke(); });
+    ticksFromStep(yMin, yMax, grid.stepY/minorDiv).values.forEach(y=>{
+      ctx.beginPath(); ctx.moveTo(padL,yPix(y)); ctx.lineTo(padL+plotW,yPix(y)); ctx.stroke(); });
+    ctx.restore();
+  }
+
+  ctx.strokeStyle = gridCol; ctx.lineWidth = 1.2;
+  xt.values.forEach(x=>{ ctx.beginPath(); ctx.moveTo(xPix(x),padT); ctx.lineTo(xPix(x),padT+plotH); ctx.stroke(); });
+  yt.values.forEach(y=>{ ctx.beginPath(); ctx.moveTo(padL,yPix(y)); ctx.lineTo(padL+plotW,yPix(y)); ctx.stroke(); });
+
+  ctx.fillStyle = tok('--pz-muted'); ctx.font = '500 12.5px ' + CHART_FONT;
+  ctx.textAlign = 'center';
+  /* a caller-supplied integer formatter (toFixed(0)) would print duplicate labels
+     once the squared grid picks a sub-1 x step, so fall back to the step-aware one */
+  const useXFn = xTickFn && grid.stepX >= 1;
+  if (!hideX) xt.values.forEach(x=>{ ctx.fillText(useXFn ? xTickFn(x) : formatTickLabel(x, xt.step), xPix(x), cssH-8); });
+  ctx.textAlign = 'right';
+  yt.values.forEach(y=>{ const py = yPix(y); if (py < padT - 2 || py > padT + plotH + 2) return; ctx.fillText(formatTickLabel(y, yt.step), padL-7, py+4.5); });
+  ctx.strokeStyle = tok('--pz-axis'); ctx.lineWidth = 1.6;
+  if (yMin < 0 && yMax > 0) {
+    ctx.beginPath(); ctx.moveTo(padL,yPix(0)); ctx.lineTo(padL+plotW,yPix(0)); ctx.stroke();
+  }
+  if (xMin < 0 && xMax > 0) {
+    ctx.beginPath(); ctx.moveTo(xPix(0),padT); ctx.lineTo(xPix(0),padT+plotH); ctx.stroke();
+  }
+
+  const tagSpots = [];
+  curves.forEach(curve => {
+    const range = (yMax - yMin) || 1;
+    const bigThresh = range * 4;
+    const clampMargin = range * 2;
+    const baseSteps = curve.steps || 400;
+    const maxDepth = curve.adaptiveDepth ?? 6;
+    const jumpThreshold = range * 0.12;
+
+    function safeY(x){
+      try { const v = curve.fn(x); return (typeof v === 'number' && isFinite(v)) ? v : NaN; }
+      catch(e){ return NaN; }
+    }
+    function refine(p0, p1, depth){
+      if (depth <= 0 || !isFinite(p0.y) || !isFinite(p1.y) || Math.abs(p1.y - p0.y) <= jumpThreshold) {
+        return [p1];
+      }
+      const midX = (p0.x + p1.x) / 2;
+      const mid = { x: midX, y: safeY(midX) };
+      return [...refine(p0, mid, depth - 1), ...refine(mid, p1, depth - 1)];
+    }
+
+    const basePts = [];
+    for (let i=0;i<=baseSteps;i++){
+      const x = xMin + (i/baseSteps)*(xMax-xMin);
+      basePts.push({ x, y: safeY(x) });
+    }
+    let points = [basePts[0]];
+    for (let i=0;i<basePts.length-1;i++){
+      points.push(...refine(basePts[i], basePts[i+1], maxDepth));
+    }
+    let tagAt = null;
+    const dom = curve.domain;
+    function strokePath(){
+      ctx.beginPath();
+      let started = false;
+      let prevY = null;
+      for (const p of points){
+        const y = p.y;
+        if (!isFinite(y)) { started = false; prevY = null; continue; }
+        if (curve.breakOnJump && prevY !== null) {
+          const wasBig = Math.abs(prevY) > bigThresh;
+          const isBig = Math.abs(y) > bigThresh;
+          const signFlip = (prevY > 0 && y < 0) || (prevY < 0 && y > 0);
+          if (wasBig && isBig && signFlip) { started = false; }
+        }
+        const clampedY = Math.max(yMin - clampMargin, Math.min(yMax + clampMargin, y));
+        const px = xPix(p.x), py = yPix(clampedY);
+        if (!started) { ctx.moveTo(px,py); started = true; } else { ctx.lineTo(px,py); }
+        // 이름표 자리: 그래프 안쪽(위아래 여유)에 있고 정의역 안에 있는 가장 오른쪽 점
+        if (curve.tag && py > padT+16 && py < padT+plotH-8 && px < padL+plotW-4 && (!dom || (p.x >= dom[0]-1e-9 && p.x <= dom[1]+1e-9))) tagAt = {px, py};
+        prevY = y;
+      }
+      ctx.stroke();
+    }
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(padL, padT, plotW, plotH);
+    ctx.clip();
+    ctx.strokeStyle = curve.color; ctx.lineWidth = curve.width || 3.25;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (dom){
+      // [2단계] 관찰 구간(0≤t≤6) 밖은 흐린 점선으로 — 끌어서 옮겨도 '다루는 구간'이 보이게
+      ctx.globalAlpha = 0.3; ctx.setLineDash([2, 7]); ctx.lineWidth = Math.max(2, (curve.width || 3.25) - 1);
+      strokePath();
+      ctx.setLineDash([]); ctx.lineWidth = curve.width || 3.25;
+      ctx.beginPath(); ctx.rect(xPix(dom[0]), padT - 6, xPix(dom[1]) - xPix(dom[0]), plotH + 12); ctx.clip();
+    }
+    ctx.globalAlpha = curve.alpha ?? 1;
+    if (curve.dash) ctx.setLineDash(curve.dash); else ctx.setLineDash([]);
+    strokePath();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.restore();
+    if (curve.tag && tagAt) tagSpots.push({ text: curve.tag, color: curve.tagColor || curve.color, ...tagAt });
+  });
+
+  /* cell-scale badge: makes the (unavoidable) difference between the horizontal and
+     vertical cell VALUE explicit, now that the cell SIZE is square.
+     [2단계] 정한 비율보다 완화되었으면 '자동'이라고 표시 (이유는 맨 아래 격자 설정에 설명) */
+  if (!noBadge) {
+    const req = (opts && opts.reqRatio != null) ? opts.reqRatio : ((uiSettings && uiSettings.cellRatio) || 0);
+    const auto = req > 0 && grid.ratio > req + 1e-9;
+    const txt = '□ 1칸 = 가로 ' + stepLabel(grid.stepX) + ' · 세로 ' + stepLabel(grid.stepY)
+              + '  (1:' + stepLabel(grid.ratio) + (auto ? ' 자동' : '') + ')';
+    ctx.font = '600 12.5px ' + CHART_FONT;
+    ctx.textAlign = 'right';
+    const w = ctx.measureText(txt).width;
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.strokeStyle = tok('--pz-line2'); ctx.lineWidth = 1.2;
+    roundRect(ctx, padL + plotW - w - 12, 4, w + 12, 22, 11); ctx.fill(); ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = tok('--pz-muted');
+    ctx.fillText(txt, padL + plotW - 6, 19.5);
+  }
+
+  // [2단계] 색+글자: 선마다 이름표 (x(t), v(t), a(t))
+  ctx.font = '800 15px ' + CHART_FONT; ctx.textAlign = 'right';
+  tagSpots.forEach(s=>{
+    let y = s.py > padT + plotH*0.5 ? s.py - 12 : s.py + 20;
+    y = Math.max(padT+15, Math.min(padT+plotH-5, y));
+    haloText(ctx, s.text, s.px - 6, y, s.color);
+  });
+
+  // [2단계] 움직이는 점 = 흰 채움 + --pz-point 굵은 테두리, 세로 안내선
+  (curves||[]).forEach(curve=>{
+    if (!curve.marker) return;
+    const px = xPix(curve.marker.x), py = yPix(curve.marker.y);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(padL-8, padT-8, plotW+16, plotH+16); ctx.clip();
+    ctx.strokeStyle = tok('--pz-line2'); ctx.lineWidth = 1.5; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT+plotH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(px, py, 6.5, 0, Math.PI*2);
+    ctx.fillStyle = tok('--pz-panel'); ctx.fill();
+    ctx.lineWidth = 3.5; ctx.strokeStyle = tok('--pz-point'); ctx.stroke();
+    ctx.restore();
+  });
+  return grid;
+}
+
+function attachPanZoom(canvasId, getView, setView, redraw){
+  const canvas = document.getElementById(canvasId);
+  /* setView must never drop the fitted height / locked ratio carried on the view —
+     losing them made the grid re-derive (and coarsen) its ratio mid-drag. */
+  const rawSetView = setView;
+  setView = (nv)=>{ const cur = getView() || {}; rawSetView({ h: cur.h, ratio: cur.ratio, ...nv }); };
+  const PAD = CHART_PAD;
+  canvas.style.touchAction = 'none';
+  canvas.style.cursor = 'grab';
+
+  let dragging = false, lastPos = null, startPos = null, dragAxis = null, pinch = null;
+
+  // [2단계] 모든 좌표를 캔버스의 CSS px 단위로 계산한다. 글자 크기(CSS zoom)가 1이 아니면
+  // getBoundingClientRect·clientX는 화면 px(확대된 값), clientWidth는 CSS px라서
+  // 둘을 섞으면 드래그가 손가락보다 빠르거나 느려진다. → 화면 px ÷ k 로 바꿔 쓴다.
+  function plotSize(){
+    return { w: Math.max(1, canvas.clientWidth - PAD.l - PAD.r), h: Math.max(1, canvas.clientHeight - PAD.t - PAD.b) };
+  }
+  function shownView(){
+    const { w, h } = plotSize();
+    return fitGridView(getView(), w, h);
+  }
+  function dataFromPixel(px, py){
+    const v = shownView(); const { w, h } = plotSize();
+    return {
+      x: v.xMin + ((px - PAD.l) / w) * (v.xMax - v.xMin),
+      y: v.yMax - ((py - PAD.t) / h) * (v.yMax - v.yMin),
+    };
+  }
+  function pointerPos(e){
+    const rect = canvas.getBoundingClientRect();
+    const k = rect.width / Math.max(1, canvas.clientWidth);     // 화면 px / CSS px
+    const p = (e.touches && e.touches.length) ? e.touches[0] : e;
+    return { x: (p.clientX - rect.left) / k, y: (p.clientY - rect.top) / k };
+  }
+  function touchDist(t0, t1){ return Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY); }
+
+  function onDown(e){
+    if (!getView()) return;
+    if (e.touches && e.touches.length === 2){
+      pinch = { startDist: touchDist(e.touches[0], e.touches[1]), startView: { ...getView() } };
+      dragging = false;
+      e.preventDefault();
+      return;
+    }
+    dragging = true;
+    lastPos = pointerPos(e);
+    startPos = lastPos;
+    dragAxis = null;
+    canvas.style.cursor = 'grabbing';
+  }
+  function onMove(e){
+    if (e.touches && e.touches.length === 2 && pinch){
+      const d = touchDist(e.touches[0], e.touches[1]);
+      const factor = pinch.startDist / Math.max(1, d);
+      const v0 = pinch.startView;
+      const cx = (v0.xMin + v0.xMax) / 2, cy = (v0.yMin + v0.yMax) / 2;
+      const halfX = (v0.xMax - v0.xMin) / 2 * factor, halfY = (v0.yMax - v0.yMin) / 2 * factor;
+      setView({ ...getView(), xMin: cx - halfX, xMax: cx + halfX, yMin: cy - halfY, yMax: cy + halfY });
+      redraw();
+      e.preventDefault();
+      return;
+    }
+    if (!dragging || !lastPos) return;
+    const pos = pointerPos(e);
+    let dxPix = pos.x - lastPos.x, dyPix = pos.y - lastPos.y;
+    if (dragAxis === null) {
+      const totalDx = pos.x - startPos.x, totalDy = pos.y - startPos.y;
+      if (Math.hypot(totalDx, totalDy) > 6) {
+        dragAxis = Math.abs(totalDx) > Math.abs(totalDy) ? 'x' : 'y';
+      }
+    }
+    if (dragAxis === 'x') dyPix = 0;
+    else if (dragAxis === 'y') dxPix = 0;
+
+    const { w, h } = plotSize();
+    const v = getView(), sv = shownView();
+    const dx = -(dxPix / w) * (sv.xMax - sv.xMin);
+    const dy = (dyPix / h) * (sv.yMax - sv.yMin);
+    setView({ ...v, xMin: v.xMin + dx, xMax: v.xMax + dx, yMin: v.yMin + dy, yMax: v.yMax + dy });
+    lastPos = pos;
+    redraw();
+    e.preventDefault();
+  }
+  function onUp(){
+    dragging = false; pinch = null; lastPos = null; startPos = null; dragAxis = null;
+    canvas.style.cursor = 'grab';
+  }
+  function onWheel(e){
+    if (!getView()) return;
+    e.preventDefault();
+    const pos = pointerPos(e);
+    const before = dataFromPixel(pos.x, pos.y);
+    const factor = e.deltaY > 0 ? 1.12 : 0.89;
+    const v = getView();
+    setView({
+      ...v,
+      xMin: before.x - (before.x - v.xMin) * factor,
+      xMax: before.x + (v.xMax - before.x) * factor,
+      yMin: before.y - (before.y - v.yMin) * factor,
+      yMax: before.y + (v.yMax - before.y) * factor,
+    });
+    redraw();
+  }
+
+  canvas.addEventListener('mousedown', onDown);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+  canvas.addEventListener('touchstart', onDown, { passive:false });
+  canvas.addEventListener('touchmove', onMove, { passive:false });
+  canvas.addEventListener('touchend', onUp);
+  canvas.addEventListener('wheel', onWheel, { passive:false });
+}
+
+function autoYRange(fn, xMin, xMax, steps, padFrac){
+  steps = steps || 300; padFrac = padFrac ?? 0.18;
+  let yMin=Infinity, yMax=-Infinity;
+  for (let i=0;i<=steps;i++){
+    const x = xMin+(i/steps)*(xMax-xMin);
+    let y; try { y = fn(x); } catch(e){ y = NaN; }
+    if (typeof y === 'number' && isFinite(y)){ if (y<yMin) yMin=y; if (y>yMax) yMax=y; }
+  }
+  if (!isFinite(yMin) || !isFinite(yMax)){ yMin=-1; yMax=1; }
+  if (yMin===yMax){ yMin-=1; yMax+=1; }
+  const pad = (yMax-yMin)*padFrac || 1;
+  return { yMin: yMin-pad, yMax: yMax+pad };
+}
+function ensureZeroVisible(r){
+  const span = (r.yMax-r.yMin) || 2;
+  if (r.yMin > 0) r.yMin = -span*0.15;
+  if (r.yMax < 0) r.yMax = span*0.15;
+  return r;
+}
+function getCssVar(name){ return tok(name); }
+function isVisible(canvas){ return !!canvas && canvas.offsetParent !== null; }
+function fmt1(n){ const r = Math.round(n*10)/10; return (Object.is(r,-0)?0:r); }
+
+/* ================= Tabs ================= */
+let currentTab = 1;
+function showTab(n){
+  currentTab = n;
+  [1,2,3,4,5].forEach(i=>{
+    document.getElementById('tab'+i).style.display = (i===n) ? '' : 'none';
+    const b = document.getElementById('tabBtn'+i);
+    b.classList.toggle('active', i===n);
+    b.setAttribute('aria-selected', String(i===n));
+  });
+  if (n!==1 && anim1.isPlaying()) anim1.pause();
+  if (n!==2 && anim2.isPlaying()) anim2.pause();
+  if (n!==3 && tab3Playing) toggleAnim3(true);
+  // [2단계] 새 패널을 부드럽게 나타나게
+  if (window.PastelUI) PastelUI.fade(document.getElementById('tab'+n));
+  drawTab(n);
+  // 레이아웃이 확정된 다음 프레임에 한 번 더 (그래프 높이를 화면에 맞춤)
+  requestAnimationFrame(()=>{ if (currentTab === n) drawTab(n); });
+}
+function drawTab(n){
+  /* [버그수정] 숨겨진 탭의 수직선은 그려지지 않으므로(탭2 수직선이 빈 칸으로 보임) 탭을 열 때 다시 그림 */
+  if (n===1) { refreshTab1(); anim1.redraw(); }
+  if (n===2) { refreshTab2(); anim2.redraw(); }
+  if (n===3) refreshTab3();
+  /* [버그수정] 화면 크기가 바뀐 뒤 돌아오면 늘어난 그림이 남지 않도록 탭을 열 때마다 다시 그림 */
+  if (n===4) { drawMissions(); tab4Drawn = true; }
+  if (n===5) { galleryDrawn = false; refreshTab5(); }
+}
+
+/* ================= settings ================= */
+// [2단계] 앱 자체 '화면 설정'(글자 크기·좌표평면 가로/세로/최대 높이)은 상단 바와 자동 높이 맞춤으로 대신하여 제거.
+// 격자 비율(cellRatio)만 맨 아래 '그래프 격자 설정'에 남김.
+function applySettings(){
+  refitAllViews();
+  redrawAllVisible();
+}
+/* recompute every pannable chart's height for the current ratio / size settings */
+function refitAllViews(){
+  if (typeof xView1 === 'undefined') return;
+  refreshFitHeight(xView1, 'xChart1');
+  refreshFitHeight(vView1, 'vChart1');
+  refreshFitHeight(vView2, 'vChart2');
+  refreshFitHeight(aView2, 'aChart2');
+}
+function redrawAllVisible(){
+  if (currentTab===1) refreshTab1();
+  if (currentTab===2) refreshTab2();
+  if (currentTab===3) refreshTab3();
+  if (currentTab===4) drawMissions();
+  if (currentTab===5) { galleryDrawn = false; refreshTab5(); }
+  anim1.redraw(); anim2.redraw();
+}
+let uiSettings = { cellRatio:5 };
+
+/* ================= collapsible graph panel ================= */
+function toggleCollapse(id){
+  const body = document.getElementById('body-'+id);
+  const arrow = document.getElementById('arrow-'+id);
+  const open = body.style.display === 'block';
+  body.style.display = open ? 'none' : 'block';
+  arrow.classList.toggle('open', !open);
+  if (!open){
+    if (id==='vGraph1'){ refreshFitHeight(vView1, 'vChart1'); refreshVChart1(); }
+    if (id==='aGraph2'){ refreshFitHeight(aView2, 'aChart2'); refreshAChart2(); }
+  }
+}
+
+/* ================= shared motion state (x(t) = a t^3 + b t^2 + c t + d) ================= */
+let coef = { a:1, b:-6, c:9, d:0 };
+const COEF_INIT = { ...coef };   // [UX] 처음 값으로
+const T_MIN = 0, T_MAX = 6;
+
+function xVal(t){ return coef.a*t*t*t + coef.b*t*t + coef.c*t + coef.d; }
+function vVal(t){ return 3*coef.a*t*t + 2*coef.b*t + coef.c; }
+function aVal(t){ return 6*coef.a*t + 2*coef.b; }
+
+function buildPoly(terms){
+  const parts = [];
+  terms.forEach(([c,p])=>{
+    /* [버그수정] 소수 첫째 자리까지만 반올림해 a=0.15 → "0.2t³", v의 계수 0.45 → "0.4t²"처럼 실제와 다른 식이 보였음 → 둘째 자리까지 */
+    const r = Math.round(c*100)/100;
+    if (r===0) return;
+    const abs = Math.abs(r);
+    const coefStr = (p!=='' && abs===1) ? '' : String(abs);
+    parts.push({ neg: r<0, text: coefStr+p });
+  });
+  if (parts.length===0) return '0';
+  let out = (parts[0].neg?'−':'') + parts[0].text;
+  for (let i=1;i<parts.length;i++) out += ` ${parts[i].neg?'−':'+'} ${parts[i].text}`;
+  return out;
+}
+function xEqStr(){ return 'x(t) = ' + buildPoly([[coef.a,'t³'],[coef.b,'t²'],[coef.c,'t'],[coef.d,'']]); }
+function vEqStr(){ return 'v(t) = ' + buildPoly([[3*coef.a,'t²'],[2*coef.b,'t'],[coef.c,'']]); }
+function aEqStr(){ return 'a(t) = ' + buildPoly([[6*coef.a,'t'],[2*coef.b,'']]); }
+
+function classify(t){
+  const v = vVal(t), a = aVal(t);
+  const EPS = 1e-6;
+  let dir = Math.abs(v)<EPS ? 'stop' : (v>0?'right':'left');
+  let speedState;
+  if (dir==='stop') speedState = Math.abs(a)<EPS ? 'flat' : (a>0?'startRight':'startLeft');
+  /* [버그수정] a(t)=0이 '이 순간'만 성립하면 등속이 아님 → 'inflect'(가속·감속이 바뀌는 순간)로 구분.
+     등속('const')은 가속도가 항상 0(a=b=0)일 때만 */
+  else speedState = Math.abs(a)<EPS ? (accelAlwaysZero() ? 'const' : 'inflect') : ((v*a>0) ? 'up' : 'down');
+  return { v, a, dir, speedState, t };
+}
+function accelAlwaysZero(){ return coef.a===0 && coef.b===0; }
+function velocityAlwaysZero(){ return coef.a===0 && coef.b===0 && coef.c===0; }
+/* [버그수정] -0.00 표시 방지 */
+function fix2(n){ const s = n.toFixed(2); return (s==='-0.00') ? '0.00' : s; }
+/* [버그수정] 시각 표시: 0.1 단위면 소수 첫째 자리, 아니면 둘째 자리까지 (값 계산 시각과 표시 시각을 일치) */
+function fmtT(t){ return (Math.abs(t*10 - Math.round(t*10)) < 1e-9) ? t.toFixed(1) : t.toFixed(2); }
+function stateLabel(cls){
+  const dirTxt = cls.dir==='right' ? '오른쪽으로' : cls.dir==='left' ? '왼쪽으로' : null;
+  if (cls.dir==='stop'){
+    /* [2차 수정] t=6(관찰 구간의 끝)에서는 '곧 출발'이라고 하지 않음 — 둘째 문항(운동 방향이 바뀐다=거짓)과 맞춤 */
+    if ((cls.speedState==='startRight' || cls.speedState==='startLeft') && cls.t >= T_MAX - 1e-9) return '정지 상태 (관찰 구간의 끝)';
+    if (cls.speedState==='startRight') return '정지 상태 (곧 오른쪽으로 출발)';
+    if (cls.speedState==='startLeft') return '정지 상태 (곧 왼쪽으로 출발)';
+    /* [버그수정] v=0, a=0이어도 v(t)≡0이 아니면 잠깐 멈췄다가 같은 방향으로 계속 움직임 */
+    if (!velocityAlwaysZero()) return '순간 정지 (방향은 바뀌지 않음)';
+    return '정지 상태';
+  }
+  if (cls.speedState==='up') return `${dirTxt} 이동하며 가속 중`;
+  if (cls.speedState==='down') return `${dirTxt} 이동하며 감속 중`;
+  if (cls.speedState==='inflect') return `${dirTxt} 이동 중 (가속도 0: 가속·감속이 바뀌는 순간)`;
+  return `${dirTxt} 등속 이동 중`;
+}
+
+/* [버그수정] 계수를 바꿔 곡선이 현재 보기 범위를 벗어나면(예: a=2, b=c=0 → x(6)=432) 그래프가 잘려 보였음
+   → 곡선(0≤t≤6)이 보기 범위를 벗어날 때만 그 그래프의 보기를 자동으로 다시 맞춤 */
+function curveOutOfView(view, fn){
+  for (let i=0;i<=120;i++){ const y = fn(T_MIN+(i/120)*(T_MAX-T_MIN)); if (y < view.yMin || y > view.yMax) return true; }
+  return false;
+}
+function refitViewsIfNeeded(){
+  let r1 = false, r2 = false;
+  if (curveOutOfView(xView1, xVal)) { xView1 = buildAutoView('xChart1', xVal); r1 = true; }
+  if (curveOutOfView(vView1, vVal)) vView1 = buildAutoView('vChart1', vVal);
+  if (curveOutOfView(vView2, vVal)) { vView2 = buildAutoView('vChart2', vVal); r2 = true; }
+  if (curveOutOfView(aView2, aVal)) aView2 = buildAutoView('aChart2', aVal);
+  /* [2단계] 보기를 다시 맞추면 눈금 값이 크게 바뀌므로 그래프 아래에 잠깐 알려 줌 */
+  if (r1 && currentTab===1) flashRefitNote('refitNote1');
+  if (r2 && currentTab===2) flashRefitNote('refitNote2');
+}
+function flashRefitNote(id){
+  const el = document.getElementById(id); if (!el) return;
+  el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(()=>el.classList.remove('show'), 2600);
+}
+function onCoefChange(){
+  syncCoefInputs();
+  refitViewsIfNeeded();
+  if (currentTab===1) refreshTab1();
+  if (currentTab===2) refreshTab2();
+  if (currentTab===3) refreshTab3();
+  if (currentTab===5) refreshTab5();
+  anim1.redraw(); anim2.redraw();
+}
+/* [UX] 처음 값으로: 위치 함수의 계수 a·b·c·d를 처음 값으로 (재생·보기는 그대로) */
+function resetCoefValues(){ Object.assign(coef, COEF_INIT); syncCoefInputs(); onCoefChange(); }
+function syncCoefInputs(){
+  /* [버그수정] 지금 입력 중인 숫자 칸은 덮어쓰지 않음 (덮어쓰면 "0.5"처럼 소수점을 타이핑할 수 없었음) */
+  const setNum = (id, v)=>{ const el = document.getElementById(id); if (document.activeElement !== el) el.value = v; };
+  document.getElementById('sliderA').value=coef.a; setNum('numA', coef.a);
+  document.getElementById('sliderB').value=coef.b; setNum('numB', coef.b);
+  document.getElementById('sliderC').value=coef.c; setNum('numC', coef.c);
+  document.getElementById('sliderD').value=coef.d; setNum('numD', coef.d);
+}
+function bindCoefPair(sliderId, numId, key, min, max){
+  const slider = document.getElementById(sliderId), num = document.getElementById(numId);
+  slider.addEventListener('input', ()=>{ coef[key]=Number(slider.value); num.value=slider.value; onCoefChange(); });
+  num.addEventListener('input', ()=>{
+    let v = Number(num.value); if (num.value==='' || isNaN(v)) return;   /* [버그수정] 칸을 비우는 순간 0으로 바뀌지 않게 */
+    v = Math.max(min, Math.min(max, v));
+    coef[key]=v; slider.value=v; onCoefChange();
+  });
+  num.addEventListener('change', ()=>{ num.value = coef[key]; });   /* 입력을 마치면 실제 적용된(범위 안으로 맞춘) 값으로 정리 */
+}
+
+/* ================= aspect-fit height (1:1 px/unit as the goal, capped when it would get absurdly tall) ================= */
+const FIT_PAD_T = CHART_PAD.t, FIT_PAD_B = CHART_PAD.b, FIT_PAD_L = CHART_PAD.l, FIT_PAD_R = CHART_PAD.r; // must match drawLineChart's padding
+const FIT_MIN_MULT = 0.55;   // never shorter than 0.55x the base GRAPH_HEIGHT (avoids overly flat charts)
+const FIT_MAX_ASPECT = 3.5;  // never taller than 3.5x its own plotted width (ties the cap to plotW itself,
+                              // so mobile and desktop get the SAME worst-case px/unit mismatch ratio,
+                              // rather than a fixed pixel cap that disadvantages wide screens)
+const FIT_ABS_MAX_H = 1300;  // hard ceiling regardless of aspect, so a very wide desktop view can't
+                              // demand multiple screens of scrolling for one chart
+function computeFitPlan(canvas, xMin, xMax, yMin, yMax, baseHeight, opts){
+  const fallback = { h: baseHeight, ratio: 0 };
+  if (!canvas) return fallback;
+  const xR = xMax - xMin, yR = yMax - yMin;
+  if (!(xR > 0) || !(yR > 0)) return fallback;
+  const cssW = canvas.clientWidth || 700;
+  const plotW = Math.max(1, cssW - FIT_PAD_L - FIT_PAD_R);
+
+  const req = (opts && opts.ratio) || uiSettings.cellRatio || 0;
+  /* [2단계] 최대 높이 = 화면에서 이 그래프가 쓸 수 있는 높이 (chartBudget). 넘으면 비율을 1:10, 1:20…으로 완화 */
+  const capH = (opts && opts.maxHeight) || chartBudget(canvas);
+  const pT = (opts && opts.padT != null) ? opts.padT : FIT_PAD_T, pB = (opts && opts.padB != null) ? opts.padB : FIT_PAD_B;
+  const maxPlotH = Math.max(60, capH - pT - pB);
+  const minPlotH = Math.min(maxPlotH, Math.max(60, baseHeight * FIT_MIN_MULT - pT - pB));
+
+  /* smallest allowed ratio whose required height still fits the max height */
+  let plotH = null, ratio = null;
+  for (const r of RATIO_LADDER){
+    if (r < req) continue;
+    const need = plotW * yR / (r * xR);
+    if (need <= maxPlotH){ plotH = need; ratio = r; break; }
+  }
+  if (plotH === null){ plotH = maxPlotH; ratio = RATIO_LADDER[RATIO_LADDER.length-1]; }
+  plotH = Math.max(minPlotH, plotH);
+  /* [2단계] 비율 사다리(1·2·5…)를 한 칸 올리면 필요한 높이가 2~2.5배 줄어 그래프가 납작해짐 →
+     정한 비율은 그대로 두고 쓸 수 있는 높이까지 세로 칸 수만 늘려 채운다(곡선은 가운데). */
+  if (!(opts && opts.noFill)) plotH = Math.max(plotH, Math.min(maxPlotH, plotW * 0.9));
+  return { h: Math.round(plotH + pT + pB), ratio };
+}
+function computeFitHeight(canvas, xMin, xMax, yMin, yMax, baseHeight){
+  return computeFitPlan(canvas, xMin, xMax, yMin, yMax, baseHeight).h;
+}
+/* Only call this at "stable" moments (reset / tab switch / panel expand) —
+   NOT inside a chart's own redraw() used as the attachPanZoom callback, or
+   the canvas would resize on every drag/zoom frame. */
+function refreshFitHeight(view, canvasId){
+  const el = document.getElementById(canvasId);
+  if (!isVisible(el)) return;
+  const plan = computeFitPlan(el, view.xMin, view.xMax, view.yMin, view.yMax, GRAPH_HEIGHT);
+  view.h = plan.h;
+  view.ratio = plan.ratio;   // locked in until the next stable refit
+}
+function buildAutoView(canvasId, fn){
+  const r = ensureZeroVisible(autoYRange(fn, T_MIN, T_MAX));
+  const view = { xMin:T_MIN, xMax:T_MAX, yMin:r.yMin, yMax:r.yMax };
+  const plan = computeFitPlan(document.getElementById(canvasId), view.xMin, view.xMax, view.yMin, view.yMax, GRAPH_HEIGHT);
+  view.h = plan.h; view.ratio = plan.ratio;
+  return view;
+}
+
+/* ================= TAB 1 ================= */
+let xView1 = buildAutoView('xChart1', xVal);
+let vView1 = buildAutoView('vChart1', vVal);
+function resetXView1(){ xView1 = buildAutoView('xChart1', xVal); refreshXChart1(); }
+function resetVView1(){ vView1 = buildAutoView('vChart1', vVal); refreshVChart1(); }
+
+function refreshXChart1(){
+  const canvas = document.getElementById('xChart1');
+  if (!isVisible(canvas)) return;
+  drawLineChart(canvas, xView1.xMin, xView1.xMax, xView1.yMin, xView1.yMax, [
+    { fn: xVal, color: tok('--xColor'), width:3.5, tag:'x(t)', tagColor: tok('--xInk'), domain:[T_MIN,T_MAX] }
+  ], (x)=>x.toFixed(1), null, xView1.h, { ratio: xView1.ratio });
+}
+function refreshVChart1(){
+  const canvas = document.getElementById('vChart1');
+  if (!isVisible(canvas)) return;
+  drawLineChart(canvas, vView1.xMin, vView1.xMax, vView1.yMin, vView1.yMax, [
+    { fn: vVal, color: tok('--vColor'), width:3.5, tag:'v(t)', tagColor: tok('--vInk'), domain:[T_MIN,T_MAX] }
+  ], (x)=>x.toFixed(1), null, vView1.h, { ratio: vView1.ratio });
+}
+function refreshTab1(){
+  document.getElementById('xEq1').textContent = xEqStr();
+  document.getElementById('vEq1').textContent = vEqStr();
+  refreshFitHeight(xView1, 'xChart1');
+  refreshXChart1();
+  if (document.getElementById('body-vGraph1').style.display === 'block') {
+    refreshFitHeight(vView1, 'vChart1');
+    refreshVChart1();
+  }
+}
+
+/* ================= TAB 2 ================= */
+let vView2 = buildAutoView('vChart2', vVal);
+let aView2 = buildAutoView('aChart2', aVal);
+function resetVView2(){ vView2 = buildAutoView('vChart2', vVal); refreshVChart2(); }
+function resetAView2(){ aView2 = buildAutoView('aChart2', aVal); refreshAChart2(); }
+
+function refreshVChart2(){
+  const canvas = document.getElementById('vChart2');
+  if (!isVisible(canvas)) return;
+  drawLineChart(canvas, vView2.xMin, vView2.xMax, vView2.yMin, vView2.yMax, [
+    { fn: vVal, color: tok('--vColor'), width:3.5, tag:'v(t)', tagColor: tok('--vInk'), domain:[T_MIN,T_MAX] }
+  ], (x)=>x.toFixed(1), null, vView2.h, { ratio: vView2.ratio });
+}
+function refreshAChart2(){
+  const canvas = document.getElementById('aChart2');
+  if (!isVisible(canvas)) return;
+  drawLineChart(canvas, aView2.xMin, aView2.xMax, aView2.yMin, aView2.yMax, [
+    { fn: aVal, color: tok('--aColor'), width:3.5, tag:'a(t)', tagColor: tok('--aInk'), domain:[T_MIN,T_MAX] }
+  ], (x)=>x.toFixed(1), null, aView2.h, { ratio: aView2.ratio });
+}
+function refreshTab2(){
+  document.getElementById('vEq2').textContent = vEqStr();
+  document.getElementById('aEq2').textContent = aEqStr();
+  refreshFitHeight(vView2, 'vChart2');
+  refreshVChart2();
+  if (document.getElementById('body-aGraph2').style.display === 'block') {
+    refreshFitHeight(aView2, 'aChart2');
+    refreshAChart2();
+  }
+}
+
+
+/* ================= number line animator (tab1 & tab2) ================= */
+const NUMLINE_H = 84, NUMLINE_Y = 46;   // [2단계] 수직선 캔버스 높이·선 위치 (점 위에 이름표 자리)
+function createNumberLine(canvasId, statusId, mode){
+  let playing=false, rafId=null, tCur=T_MIN, animStartTs=null, animStartT=T_MIN;
+  const DURATION_MS = 5200;
+  const canvas = document.getElementById(canvasId);
+  const statusEl = document.getElementById(statusId);
+
+  function draw(t){
+    if (!isVisible(canvas)) return;
+    // [2단계] zoom 반영 해상도, 테마 색, 방향은 색+화살표(→ ←), 속력 변화는 색+▲▼
+    const dpr = (window.devicePixelRatio||1) * cssScale(canvas);
+    const cssW = canvas.clientWidth||700, cssH=NUMLINE_H;
+    canvas.width=Math.round(cssW*dpr); canvas.height=Math.round(cssH*dpr);
+    const ctx=canvas.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.scale(dpr,dpr);
+    ctx.clearRect(0,0,cssW,cssH);
+
+    let xMinV=Infinity,xMaxV=-Infinity;
+    for (let i=0;i<=100;i++){ const tt=T_MIN+(i/100)*(T_MAX-T_MIN); const xv=xVal(tt); if(xv<xMinV)xMinV=xv; if(xv>xMaxV)xMaxV=xv; }
+    if (xMinV===xMaxV){ xMinV-=1; xMaxV+=1; }
+    const pad=(xMaxV-xMinV)*0.15||1; xMinV-=pad; xMaxV+=pad;
+    const padL=22, padR=22, lineY=NUMLINE_Y;
+    function xPix(x){ return padL + (x-xMinV)/(xMaxV-xMinV)*(cssW-padL-padR); }
+
+    ctx.strokeStyle=tok('--pz-line2'); ctx.lineWidth=4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(padL,lineY); ctx.lineTo(cssW-padR,lineY); ctx.stroke();
+
+    // 눈금 (보기 좋은 값) — 0은 축 색으로 진하게
+    const tk = niceTicks(xMinV, xMaxV, Math.max(3, Math.round((cssW-padL-padR)/90)));
+    ctx.font='500 12.5px '+CHART_FONT; ctx.textAlign='center';
+    tk.values.forEach(v=>{
+      const zero = Math.abs(v) < 1e-9, px = xPix(v);
+      if (px < padL-1 || px > cssW-padR+1) return;
+      ctx.strokeStyle = zero ? tok('--pz-axis') : tok('--pz-line2'); ctx.lineWidth = zero ? 2 : 1.5;
+      ctx.beginPath(); ctx.moveTo(px,lineY-(zero?9:6)); ctx.lineTo(px,lineY+(zero?9:6)); ctx.stroke();
+      ctx.fillStyle = zero ? tok('--pz-ink2') : tok('--pz-muted');
+      ctx.fillText(formatTickLabel(v, tk.step), px, lineY+24);
+    });
+
+    const xv=xVal(t), cls=classify(t);
+    let color = tok('--stop'), ink = tok('--pz-muted'), sym = '■ ', tagTxt = '정지';
+    if (mode==='velocity'){
+      if (cls.dir==='right'){ color = tok('--right'); ink = tok('--rightInk'); sym = '→ '; tagTxt = '→ 오른쪽'; }
+      else if (cls.dir==='left'){ color = tok('--left'); ink = tok('--leftInk'); sym = '← '; tagTxt = '← 왼쪽'; }
+    } else {
+      if (cls.dir==='stop'){ /* 정지 */ }
+      else if (cls.speedState==='up'){ color = tok('--speedUp'); ink = tok('--speedUpInk'); sym = '▲ '; tagTxt = '▲ 속력 증가'; }
+      else if (cls.speedState==='down'){ color = tok('--speedDown'); ink = tok('--speedDownInk'); sym = '▼ '; tagTxt = '▼ 속력 감소'; }
+      else { color = tok('--pz-ink2'); ink = tok('--pz-ink2'); sym = '= '; tagTxt = cls.speedState==='const' ? '= 등속' : '가속도 0'; }
+    }
+    const dx = xPix(xv);
+    // 운동 방향 화살표 (방향 모드: 점과 같은 색 / 가속 모드: 진한 회색)
+    if (cls.dir!=='stop'){
+      const s = cls.dir==='right' ? 1 : -1, ac = mode==='velocity' ? color : tok('--pz-ink2');
+      const x0 = dx + s*12, x1 = dx + s*34;
+      ctx.strokeStyle=ac; ctx.fillStyle=ac; ctx.lineWidth=3; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(x0,lineY); ctx.lineTo(x1,lineY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x1+s*6,lineY); ctx.lineTo(x1-s*3,lineY-6); ctx.lineTo(x1-s*3,lineY+6); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle=color;
+    ctx.beginPath(); ctx.arc(dx, lineY, 9, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle=tok('--pz-panel'); ctx.lineWidth=2.5; ctx.stroke();
+    // 점 위 이름표
+    ctx.font='800 14px '+CHART_FONT;
+    const tw = ctx.measureText(tagTxt).width;
+    const tx = Math.max(padL - 14 + tw/2, Math.min(cssW - padR + 14 - tw/2, dx));
+    ctx.textAlign='center'; haloText(ctx, tagTxt, tx, lineY-17, ink);
+
+    if (statusEl){
+      statusEl.textContent = `t=${t.toFixed(1)} · ${stateLabel(cls)}`;
+      statusEl.dataset.sym = sym;
+      statusEl.style.color = ink;
+    }
+  }
+
+  function frame(ts){
+    if (animStartTs===null) animStartTs=ts;
+    const elapsed = ts-animStartTs;
+    let t = animStartT + (elapsed/DURATION_MS)*(T_MAX-T_MIN);
+    if (t>=T_MAX){ t=T_MAX; playing=false; }
+    tCur=t; draw(t);
+    if (playing) rafId=requestAnimationFrame(frame);
+    else setPlayBtnState(canvasId, false);
+  }
+  function play(){
+    if (playing) return;
+    if (tCur>=T_MAX) tCur=T_MIN;
+    playing=true; animStartTs=null; animStartT=tCur;
+    rafId=requestAnimationFrame(frame);
+    setPlayBtnState(canvasId, true);
+  }
+  function pause(){ playing=false; if (rafId) cancelAnimationFrame(rafId); setPlayBtnState(canvasId,false); }
+  function reset(){ pause(); tCur=T_MIN; draw(tCur); }
+  function redraw(){ draw(tCur); }
+  draw(T_MIN);
+  return { play, pause, reset, redraw, isPlaying:()=>playing };
+}
+function setPlayBtnState(canvasId, isPlaying){
+  const map = { numline1:'playBtn1', numline2:'playBtn2' };
+  const btn = document.getElementById(map[canvasId]);
+  if (!btn) return;
+  btn.textContent = isPlaying ? '⏸ 일시정지' : '▶ 재생';
+  btn.classList.toggle('playing', isPlaying);
+}
+
+let anim1, anim2;
+function toggleAnim1(){ anim1.isPlaying() ? anim1.pause() : anim1.play(); }
+function animReset1(){ anim1.reset(); }
+function toggleAnim2(){ anim2.isPlaying() ? anim2.pause() : anim2.play(); }
+function animReset2(){ anim2.reset(); }
+
+/* ================= TAB 3 ================= */
+let tab3T = 0, tab3Playing = false, tab3Raf = null, tab3StartTs = null, tab3StartT = 0;
+const TAB3_DURATION_MS = 6000;
+
+/* 탭3: 가로 1 : 세로 10 비율, 격자 칸을 촘촘하게 */
+/* [2단계] 최대 높이는 화면에 맞춰 chartBudget()이 정함 (예전 2600px → 1440×900에서 세 그래프 + t 슬라이더가 한 화면) */
+const TAB3_GRID = { ratio: 5, minor: 2, baseH: 200 };
+function refreshTab3(){
+  const t = tab3T;
+  const xr = ensureZeroVisible(autoYRange(xVal,T_MIN,T_MAX));
+  const vr = ensureZeroVisible(autoYRange(vVal,T_MIN,T_MAX));
+  const ar = ensureZeroVisible(autoYRange(aVal,T_MIN,T_MAX));
+
+  const xCanvas = document.getElementById('xMini3'), vCanvas = document.getElementById('vMini3'), aCanvas = document.getElementById('aMini3');
+  /* [2단계] 세 그래프는 같은 t축을 쓰므로 t 눈금 숫자는 맨 아래(a)에만, 격자 배지는 그래프 대신 아래 한 줄(t3Scale)로 */
+  const drawMini3 = (canvas, r, curve, last)=>{
+    if (!isVisible(canvas)) return null;
+    const pads = { padT: 10, padB: last ? CHART_PAD.b : 8 };
+    const plan = computeFitPlan(canvas, T_MIN, T_MAX, r.yMin, r.yMax, TAB3_GRID.baseH, { ratio: TAB3_GRID.ratio, maxHeight: chartBudget(canvas), ...pads });
+    return drawLineChart(canvas, T_MIN, T_MAX, r.yMin, r.yMax, [curve], (x)=>x.toFixed(0), null,
+                  plan.h, { ratio: plan.ratio, minor: TAB3_GRID.minor, noBadge: true, hideXLabels: !last, ...pads });
+  };
+  const gx = drawMini3(xCanvas, xr, { fn:xVal, color:tok('--xColor'), width:3, tag:'x(t)', tagColor:tok('--xInk'), marker:{x:t,y:xVal(t)} });
+  const gv = drawMini3(vCanvas, vr, { fn:vVal, color:tok('--vColor'), width:3, tag:'v(t)', tagColor:tok('--vInk'), marker:{x:t,y:vVal(t)} });
+  const ga = drawMini3(aCanvas, ar, { fn:aVal, color:tok('--aColor'), width:3, tag:'a(t)', tagColor:tok('--aInk'), marker:{x:t,y:aVal(t)} }, true);
+  if (gx && gv && ga){
+    const req = Math.max(TAB3_GRID.ratio, uiSettings.cellRatio||0);
+    const one = (nm, g)=> nm + ' ' + stepLabel(g.stepY) + (g.ratio > req + 1e-9 ? '(자동)' : '');
+    document.getElementById('t3Scale').textContent = '□ 격자 한 칸: 가로(시간) ' + stepLabel(gx.stepX) + ' · 세로 ' + [one('x', gx), one('v', gv), one('a', ga)].join(' / ');
+  }
+
+  document.getElementById('badgeX').textContent = fix2(xVal(t));
+  document.getElementById('badgeV').textContent = fix2(vVal(t));
+  document.getElementById('badgeA').textContent = fix2(aVal(t));
+
+  const cls = classify(t);
+  const statusEl = document.getElementById('statusLine3');
+  statusEl.textContent = `t = ${fmtT(t)}  →  ${stateLabel(cls)}`;
+  /* [2단계] 색+기호: 방향 화살표(앞에 CSS로) + 방향 색 */
+  statusEl.dataset.sym = cls.dir==='right' ? '→ ' : cls.dir==='left' ? '← ' : '■ ';
+  statusEl.style.color = tok(cls.dir==='right' ? '--rightInk' : cls.dir==='left' ? '--leftInk' : '--pz-ink2');
+  syncAccelCard(cls);
+}
+/* [2차 수정·교사 답변] v=0인 순간에는 "가속하고 있다(속력이 커지고 있다)"의 참·거짓이 애매하므로,
+   그 순간에만 둘째 문항을 "운동 방향이 바뀐다"(v의 부호 변화로 판정)로 바꿔 보여 줌. v≠0이면 원래 문항 */
+const PROP_ACCEL_TEXT = '지금 이 순간, 물체는 가속하고 있다 (속력이 커지고 있다).';
+const PROP_TURN_TEXT  = '지금 이 순간, 물체의 운동 방향이 바뀐다.';
+let accelCardMode = 'accel';
+function syncAccelCard(cls){
+  const mode = (cls.dir==='stop') ? 'turn' : 'accel';
+  if (mode === accelCardMode) return;
+  accelCardMode = mode;
+  document.getElementById('propAccelText').textContent = (mode==='turn') ? PROP_TURN_TEXT : PROP_ACCEL_TEXT;
+  const ans = document.querySelector('#propAccelCard .propAnswer');   /* 문항이 바뀌면 이전 문항의 답은 숨김 */
+  ans.innerHTML = ''; ans.style.display = 'none';
+}
+function onTab3SliderChange(){
+  tab3T = Number(document.getElementById('sliderT3').value);
+  document.getElementById('numT3').value = tab3T;
+  refreshTab3();
+}
+function toggleAnim3(forcePause){
+  if (forcePause===true){ pauseAnim3(); return; }
+  tab3Playing ? pauseAnim3() : playAnim3();
+}
+function playAnim3(){
+  if (tab3Playing) return;
+  if (tab3T>=T_MAX) tab3T=T_MIN;
+  tab3Playing=true; tab3StartTs=null; tab3StartT=tab3T;
+  document.getElementById('playBtn3').textContent='⏸ 일시정지';
+  document.getElementById('playBtn3').classList.add('playing');
+  tab3Raf = requestAnimationFrame(tab3Frame);
+}
+function pauseAnim3(){
+  const wasPlaying = tab3Playing;
+  tab3Playing=false; if (tab3Raf) cancelAnimationFrame(tab3Raf);
+  /* [버그수정] 자동 스캔을 멈추면 t가 2.9873처럼 남아 "t=3.0인데 v(3.0)=-0.08"로 보였음 → 슬라이더 눈금(0.1)에 맞춤 */
+  if (wasPlaying){
+    tab3T = Math.round(tab3T*10)/10;
+    document.getElementById('sliderT3').value=tab3T; document.getElementById('numT3').value=tab3T;
+    refreshTab3();
+  }
+  document.getElementById('playBtn3').textContent='▶ 자동 스캔';
+  document.getElementById('playBtn3').classList.remove('playing');
+}
+function animReset3(){
+  pauseAnim3(); tab3T=T_MIN;
+  document.getElementById('sliderT3').value=T_MIN; document.getElementById('numT3').value=T_MIN;
+  refreshTab3();
+}
+function tab3Frame(ts){
+  if (tab3StartTs===null) tab3StartTs=ts;
+  const elapsed = ts-tab3StartTs;
+  let t = tab3StartT + (elapsed/TAB3_DURATION_MS)*(T_MAX-T_MIN);
+  if (t>=T_MAX){ t=T_MAX; tab3Playing=false; }
+  tab3T=Math.round(t*100)/100;   /* [버그수정] 표시하는 t(소수 둘째 자리)와 계산하는 t를 일치 */
+  document.getElementById('sliderT3').value=tab3T;
+  document.getElementById('numT3').value=tab3T;
+  refreshTab3();
+  if (tab3Playing) tab3Raf=requestAnimationFrame(tab3Frame);
+  else pauseAnim3();
+}
+
+/* dynamic propositions for tab3 (evaluated live against current tab3T) */
+function revealDynamicProp(btn, kind){
+  const cls = classify(tab3T);
+  let isTrue, explain;
+  const T = fmtT(tab3T);
+  if (kind==='stop'){
+    isTrue = cls.dir==='stop';
+    explain = `v(${T}) = ${fix2(vVal(tab3T))} 이므로 ${isTrue?'정지 상태가 맞습니다.':'정지 상태가 아닙니다 (속도가 0이 아닙니다).'}`;
+  } else if (kind==='accel' && cls.dir==='stop'){
+    /* [2차 수정·교사 답변] v=0인 순간: "운동 방향이 바뀐다" — v(t)=0이고 그 앞뒤로 v의 부호가 바뀔 때만 참.
+       v는 2차 이하 다항식이므로 v=0, a≠0 ⇔ 단순근 ⇔ 부호가 바뀜. 0≤t≤6 밖의 운동은 다루지 않으므로 양 끝 시각은 거짓 */
+    syncAccelCard(cls);
+    const a = aVal(tab3T), aZero = Math.abs(a) < 1e-6;
+    const atStart = tab3T <= T_MIN + 1e-9, atEnd = tab3T >= T_MAX - 1e-9;
+    isTrue = !aZero && !atStart && !atEnd;
+    if (velocityAlwaysZero()){
+      explain = '속도가 항상 0이라 물체가 움직이지 않으므로 운동 방향이 바뀌지 않습니다.';
+    } else if (atStart){
+      const sAfter = Math.sign(vVal(tab3T+1e-3));
+      explain = `v(${T}) = 0.00 이지만 t=0은 출발하는 순간이라 그 전의 운동이 없습니다. 이 순간부터 ${sAfter>0?'오른쪽':'왼쪽'}으로 움직이기 시작할 뿐, 운동 방향이 바뀌는 것은 아닙니다.`;
+    } else if (atEnd){
+      explain = `v(${T}) = 0.00 이지만 t=6은 관찰 구간(0≤t≤6)의 끝이라 그 뒤의 운동을 다루지 않습니다. 이 구간 안에서는 운동 방향이 바뀐다고 할 수 없습니다.`;
+    } else if (aZero){
+      const sgn = Math.sign(vVal(tab3T+1e-3));
+      explain = `v(${T}) = 0.00, a(${T}) = 0.00 입니다. 이 순간 앞뒤로 v(t)의 부호가 모두 ${sgn>0?'양(+)':'음(−)'}이라 바뀌지 않으므로, `
+        + `잠깐 멈췄다가 같은 방향(${sgn>0?'오른쪽':'왼쪽'})으로 계속 움직입니다. 운동 방향은 바뀌지 않습니다.`;
+    } else {
+      explain = `v(${T}) = 0.00 이고 a(${T}) = ${fix2(a)} ≠ 0 이므로, 이 순간 앞뒤로 v(t)의 부호가 ${a>0?'음(−)에서 양(+)으로':'양(+)에서 음(−)으로'} 바뀝니다. `
+        + `${a>0?'왼쪽에서 오른쪽으로':'오른쪽에서 왼쪽으로'} 운동 방향이 바뀌는 순간입니다.`;
+    }
+  } else if (kind==='accel'){
+    syncAccelCard(cls);
+    isTrue = cls.speedState==='up';
+    /* [버그수정] a=0인 경우(등속·순간 a=0)의 설명이 수학적으로 틀렸던 것을 바로잡음 */
+    if (cls.speedState==='const' || cls.speedState==='inflect'){
+      explain = `v(${T}) = ${fix2(vVal(tab3T))}, a(${T}) = ${fix2(aVal(tab3T))} 로 가속도가 0이므로 이 순간 속력은 커지지도 작아지지도 않습니다`
+        + (cls.speedState==='const' ? ' (등속 운동).' : ' (가속과 감속이 바뀌는 순간).');
+    } else {
+      explain = `v(${T}) = ${fix2(vVal(tab3T))}, a(${T}) = ${fix2(aVal(tab3T))} 로 부호가 ${isTrue?'같으므로 가속(속력 증가) 중입니다.':'다르므로 감속(속력 감소) 중입니다.'}`;
+    }
+  } else { // left
+    isTrue = cls.dir==='left';
+    explain = `v(${T}) = ${fix2(vVal(tab3T))} 이므로 ${isTrue?'왼쪽(음의 방향)으로 움직이고 있습니다.':(cls.dir==='right'?'오른쪽(양의 방향)으로 움직이고 있습니다.':'정지 상태입니다. 왼쪽으로 움직이고 있지 않습니다.')}`;
+  }
+  const answerEl = btn.nextElementSibling;
+  answerEl.innerHTML = `<span class="propBadge ${isTrue?'propTrue':'propFalse'}">${isTrue?'참':'거짓'}</span><div class="propExplain">${explain}</div>`;
+  answerEl.style.display='';
+}
+
+/* ================= TAB 4 : missions (fixed preset v(t) graphs) ================= */
+let tab4Drawn = false;
+const missions = {
+  A: { vFn: t => t-3, aFn: ()=>1,
+    props: [
+      { text:'t=3일 때 물체는 정지한다.', isTrue:true, explain:'v(3) = 3−3 = 0 이므로 정지하는 순간입니다.' },
+      { text:'0≤t<3 구간에서 물체는 감속하고 있다.', isTrue:true, explain:'이 구간에서 v(t)<0, a(t)=1>0으로 부호가 다르므로 감속(속력 감소) 중입니다.' },
+      { text:'t>3 구간에서는 물체가 왼쪽으로 움직인다.', isTrue:false, explain:'t>3에서는 v(t)=t−3>0이므로 오른쪽(양의 방향)으로 움직입니다.' }
+    ]},
+  B: { vFn: t => -2*t+8, aFn: ()=>-2,
+    props: [
+      { text:'이 물체는 0≤t≤6 구간 내내 감속하고 있다.', isTrue:false, explain:'t<4에서는 v>0, a<0로 감속이지만, t>4에서는 v<0, a<0로 부호가 같아져 오히려 가속(음의 방향으로 속력 증가)합니다.' },
+      { text:'t=4에서 운동 방향이 바뀐다.', isTrue:true, explain:'v(4) = −8+8 = 0 이고 그 앞뒤로 부호가 바뀌므로 방향 전환이 맞습니다.' },
+      { text:'가속도는 항상 일정하다.', isTrue:true, explain:'a(t) = −2로 시간에 관계없이 일정합니다 (등가속도 운동).' }
+    ]},
+  C: { vFn: t => t*t-4, aFn: t => 2*t,
+    props: [
+      { text:'t=2에서 물체는 방향을 바꾼다.', isTrue:true, explain:'v(2) = 4−4 = 0이고 앞뒤로 부호가 바뀌므로 방향 전환이 맞습니다.' },
+      { text:'0<t<2 구간에서 물체는 가속하고 있다.', isTrue:false, explain:'이 구간에서 v(t)<0, a(t)=2t>0으로 부호가 다르므로 오히려 감속하고 있습니다.' },
+      { text:'t>2 구간에서는 항상 가속하고 있다.', isTrue:true, explain:'이 구간에서 v(t)>0, a(t)=2t>0으로 부호가 같으므로 계속 가속합니다.' }
+    ]}
+};
+/* 탭4: 가로 1 : 세로 1 비율, 격자 칸을 촘촘하게 */
+/* [2단계] 최대 높이는 chartBudget()이 화면에 맞춰 정함 (예전 1500px → 그래프 하나 약 340px) */
+const TAB4_GRID = { ratio: 1, minor: 2, baseH: 240 };
+function drawMissions(){
+  ['A','B','C'].forEach(key=>{
+    const m = missions[key];
+    const canvas = document.getElementById('mission'+key);
+    if (isVisible(canvas)){
+      const r = ensureZeroVisible(autoYRange(m.vFn, T_MIN, T_MAX));
+      const plan = computeFitPlan(canvas, T_MIN, T_MAX, r.yMin, r.yMax, TAB4_GRID.baseH, { ratio: TAB4_GRID.ratio, maxHeight: chartBudget(canvas) });
+      drawLineChart(canvas, T_MIN, T_MAX, r.yMin, r.yMax, [{ fn:m.vFn, color:tok('--vColor'), width:3.25, tag:'v(t)', tagColor:tok('--vInk') }],
+                    (x)=>x.toFixed(0), null, plan.h, { ratio: plan.ratio, minor: TAB4_GRID.minor, reqRatio: TAB4_GRID.ratio });
+    }
+    const propsEl = document.getElementById('mission'+key+'Props');
+    if (propsEl.childElementCount===0){
+      propsEl.innerHTML = m.props.map(p=>`
+        <div class="propCard">
+          <div class="propText">${p.text.replace(/</g,'&lt;')}</div>
+          <button class="propRevealBtn pz-btn pz-btn-soft btnSm" data-true="${p.isTrue}" data-explain="${p.explain.replace(/"/g,'&quot;')}" onclick="revealFixedProp(this)">정답 확인</button>
+          <div class="propAnswer" style="display:none"></div>
+        </div>`).join('');
+    }
+  });
+}
+function revealFixedProp(btn){
+  const isTrue = btn.dataset.true==='true';
+  /* [버그수정] 문장 속 '0<t<2'가 HTML 태그로 해석되어 미션 C의 둘째·셋째 문항이 깨져 보였음 → '<'를 이스케이프 */
+  const explain = btn.dataset.explain.replace(/</g,'&lt;');
+  const answerEl = btn.nextElementSibling;
+  answerEl.innerHTML = `<span class="propBadge ${isTrue?'propTrue':'propFalse'}">${isTrue?'참':'거짓'}</span><div class="propExplain">${explain}</div>`;
+  answerEl.style.display='';
+  btn.style.display='none';
+  /* [2단계] 미션의 세 문항을 모두 확인하면 완료 표시 + 처음 한 번 축하 */
+  const box = btn.closest('[id^="mission"][id$="Props"]');
+  if (box && [...box.querySelectorAll('.propRevealBtn')].every(b=>b.style.display==='none')){
+    const key = box.id.replace('mission','').replace('Props','');
+    const tag = document.getElementById('doneTag'+key);
+    if (tag && !tag.classList.contains('done')){ tag.classList.add('done'); tag.textContent = '✓ 완료'; }
+    if (window.PastelUI) PastelUI.celebrate('2-4-6-방향전환미션-'+key, '🎉 미션 '+key+' 완료!');
+  }
+}
+
+/* ================= TAB 5 : type gallery ================= */
+const galleryTypes = {
+  A: { vFn: t=>2, label:'등속 운동' },
+  B: { vFn: t=>2*t, label:'등가속도 운동' },
+  C: { vFn: t=>-3*t*t+18*t, label:'속력이 늘었다 줄었다' },
+  D: { vFn: t=>3*t*t-12*t+9, label:'운동 방향이 바뀌는 운동' },
+  E: { vFn: t=>t*t/3+1, label:'속력이 한쪽으로만 변하는 운동' }
+};
+function classifyMotionType(){
+  /* [버그수정] 81개 점 표본으로 부호 변화를 찾아 아주 짧은 구간(예: a=−2, b=0.1, c=0 → t≈0.03에서 방향 전환)을 놓쳤음
+     → v(t)=0의 근(중근 제외)이 0<t<6 안에 있는지로 정확히 판정 */
+  const A=3*coef.a, B=2*coef.b, C=coef.c;
+  let roots=[];
+  if (Math.abs(A)<1e-12){ if (Math.abs(B)>1e-12) roots=[-C/B]; }
+  else { const D=B*B-4*A*C; if (D>1e-12){ const s=Math.sqrt(D); roots=[(-B-s)/(2*A), (-B+s)/(2*A)]; } }
+  const directionChanges = roots.some(r=>r>T_MIN+1e-9 && r<T_MAX-1e-9);
+  if (directionChanges) return 'D';
+  if (coef.a===0 && coef.b===0) return 'A';
+  if (coef.a===0 && coef.b!==0) return 'B';
+  /* [2차 수정·교사 답변] a≠0이고 방향이 안 바뀌면, 속력 |v|가 꺾이는 것은 v의 꼭짓점 t=−b/(3a)가 0<t<6 안에 있을 때뿐.
+     꼭짓점이 구간 밖(또는 끝)이면 속력이 계속 커지거나 계속 작아짐(x=t³ 등) → E */
+  const tv = -coef.b/(3*coef.a);
+  return (tv > T_MIN + 1e-9 && tv < T_MAX - 1e-9) ? 'C' : 'E';
+}
+let galleryDrawn = false;
+function refreshTab5(){
+  if (!galleryDrawn){
+    ['A','B','C','D','E'].forEach(key=>{
+      const canvas = document.getElementById('galleryCanvas'+key);
+      const r = ensureZeroVisible(autoYRange(galleryTypes[key].vFn, T_MIN, T_MAX));
+      drawLineChart(canvas, T_MIN, T_MAX, r.yMin, r.yMax, [{ fn:galleryTypes[key].vFn, color:tok('--vColor'), width:3, tag:'v(t)', tagColor:tok('--vInk') }], null, null, 110, { noBadge:true });
+    });
+    galleryDrawn = true;
+  }
+  const type = classifyMotionType();
+  ['A','B','C','D','E'].forEach(key=>{
+    const card = document.getElementById('gallery'+key);
+    card.classList.toggle('match', key===type);
+  });
+  document.getElementById('matchBanner').textContent = `현재 함수는 "${galleryTypes[type].label}" 유형에 가깝습니다`;
+}
+
+/* ================= init ================= */
+let resizeTimer = null;
+window.addEventListener('resize', ()=>{
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(()=>{ refitAllViews(); redrawAllVisible(); }, 160);
+});
+document.getElementById('selRatio').addEventListener('change', (e)=>{
+  uiSettings.cellRatio = Number(e.target.value);
+  refitAllViews();
+  applySettings();
+});
+
+bindCoefPair('sliderA','numA','a',-2,2);
+bindCoefPair('sliderB','numB','b',-8,8);
+bindCoefPair('sliderC','numC','c',-12,12);
+bindCoefPair('sliderD','numD','d',-8,8);
+syncCoefInputs();
+
+attachPanZoom('xChart1', ()=>xView1, v=>{xView1=v;}, refreshXChart1);
+attachPanZoom('vChart1', ()=>vView1, v=>{vView1=v;}, refreshVChart1);
+attachPanZoom('vChart2', ()=>vView2, v=>{vView2=v;}, refreshVChart2);
+attachPanZoom('aChart2', ()=>aView2, v=>{aView2=v;}, refreshAChart2);
+
+anim1 = createNumberLine('numline1','numlineStatus1','velocity');
+anim2 = createNumberLine('numline2','numlineStatus2','acceleration');
+
+document.getElementById('sliderT3').addEventListener('input', onTab3SliderChange);
+document.getElementById('numT3').addEventListener('input', ()=>{
+  /* [버그수정] 입력 중인 칸을 덮어써서 "2.5" 같은 소수를 타이핑할 수 없던 문제 → 빈 칸은 무시, 칸 정리는 change 때만 */
+  const raw = document.getElementById('numT3').value;
+  let v = Number(raw); if (raw==='' || isNaN(v)) return;
+  v = Math.max(T_MIN, Math.min(T_MAX, v));
+  tab3T=v; document.getElementById('sliderT3').value=v;
+  refreshTab3();
+});
+document.getElementById('numT3').addEventListener('change', ()=>{ document.getElementById('numT3').value=tab3T; });
+
+applySettings();   /* applies width, layout mode, and refits every chart */
+refreshTab1();
+refreshTab3();
+/* The first fit can run before the grid columns / web fonts have settled, so watch
+   the content column and re-fit whenever its width really changes (also covers
+   window resize, tablet rotation and the width slider). */
+(function watchWidth(){
+  const wrap = document.getElementById('wrap');
+  let lastW = 0, timer = null;
+  const refit = ()=>{ refitAllViews(); redrawAllVisible(); };
+  requestAnimationFrame(refit);
+  if (typeof ResizeObserver === 'function'){
+    new ResizeObserver(entries=>{
+      const w = entries[0].contentRect.width;
+      if (Math.abs(w - lastW) < 2) return;
+      lastW = w;
+      clearTimeout(timer); timer = setTimeout(refit, 80);
+    }).observe(wrap);
+  }
+})();
+</script>
+</body>
+</html>

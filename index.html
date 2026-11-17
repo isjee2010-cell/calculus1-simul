@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>미적분Ⅰ 수업 시뮬레이터 모음</title>
+<meta name="description" content="2022 개정 미적분Ⅰ 단원별 수업용 웹 시뮬레이터 17개와 함께 쓰는 수업 슬라이드">
+<style>
+  /* 허브 페이지 전용 배치. 색·모서리·버튼·카드 모양은 shared/theme.css 를 그대로 쓴다 */
+  * { box-sizing: border-box; }
+  body { margin: 0; line-height: 1.6; }
+  .hub-head { padding: clamp(28px, 5vw, 56px) 0 8px; }
+  .hub-kicker { margin-bottom: 12px; }
+  .hub-title { font-family: var(--pz-font-title); font-weight: 400; font-size: clamp(30px, 4.6vw, 52px); line-height: 1.2; margin: 0 0 10px; color: var(--pz-ink); }
+  .hub-lead { font-size: clamp(16px, 1.6vw, 19px); color: var(--pz-ink2); margin: 0; max-width: 62em; }
+  .hub-jump { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+  .hub-jump a { text-decoration: none; }
+
+  .hub-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; margin: 26px 0 8px; }
+  .hub-info .pz-card { padding: 18px 20px; }
+  .hub-info h2 { font-family: var(--pz-font-title); font-weight: 400; font-size: 21px; margin: 0 0 10px; color: var(--pz-ink); }
+  .hub-info ul { margin: 0; padding-left: 1.2em; color: var(--pz-ink2); font-size: 15.5px; }
+  .hub-info li { margin: 4px 0; }
+  .hub-info b { color: var(--pz-ink); }
+  kbd { font: 600 13px/1 var(--pz-mono); padding: 3px 7px; border-radius: 8px; background: var(--pz-soft); box-shadow: 0 0 0 1.5px var(--pz-line2) inset; color: var(--pz-ink); }
+
+  .unit { margin: 40px 0 0; scroll-margin-top: 16px; }
+  .unit-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 14px; }
+  .unit-head h2 { font-family: var(--pz-font-title); font-weight: 400; font-size: clamp(24px, 2.6vw, 32px); margin: 0; color: var(--pz-ink); }
+  .unit-head p { margin: 0; color: var(--pz-muted); font-size: 15px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+
+  .app-card { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; }
+  .app-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .app-card h3 { font-family: var(--pz-font-title); font-weight: 400; font-size: 21px; line-height: 1.3; margin: 0; color: var(--pz-ink); }
+  .app-name { font-size: 14px; font-weight: 700; color: var(--pz-accent-ink); }
+  .app-desc { margin: 0; color: var(--pz-ink2); font-size: 15.5px; flex: 1; }
+  .app-meta { margin: 0; color: var(--pz-muted); font-size: 13.5px; }
+  .app-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .app-btns .pz-btn { flex: 1 1 120px; min-height: 44px; }
+  .app-btns .pz-btn-primary { margin-bottom: 5px; }
+  .u1 .pz-badge { background: var(--pz-sky-soft); color: var(--pz-sky-ink); }
+  .u2 .pz-badge { background: var(--pz-accent-soft); color: var(--pz-accent-ink); }
+  .u3 .pz-badge { background: var(--pz-lav-soft); color: var(--pz-lav-ink); }
+
+  .hub-foot { text-align: center; font-size: 13px; color: var(--pz-muted); margin: 48px 0 0; }
+  @media (min-width: 1700px) { .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="shared/theme.css">
+</head>
+<body>
+<div class="pz-blobs" aria-hidden="true"><i></i><i></i><i></i></div>
+<main class="pz-wrap">
+
+  <header class="hub-head">
+    <div class="hub-kicker"><span class="pz-badge">2022 개정 · 미적분Ⅰ</span></div>
+    <h1 class="hub-title">미적분Ⅰ 수업 시뮬레이터 모음</h1>
+    <p class="hub-lead">단원별로 학생이 직접 조작하며 개념을 탐구하는 웹 시뮬레이터 17개입니다. 앱마다 <b>수업 슬라이드</b>(도입 질문 → 개념 → 앱 활동 안내 → 확인 문제 → 정리)가 함께 있어, 교실 화면에 슬라이드를 띄우고 그 안에서 바로 앱을 실행할 수 있어요.</p>
+    <nav class="hub-jump" aria-label="단원 바로 가기">
+      <a class="pz-chip" href="#unit1">Ⅰ. 함수의 극한과 연속</a>
+      <a class="pz-chip" href="#unit2">Ⅱ. 미분</a>
+      <a class="pz-chip" href="#unit3">Ⅲ. 적분</a>
+    </nav>
+  </header>
+
+  <section class="hub-info" aria-label="사용 안내">
+    <div class="pz-card">
+      <h2>사용 환경</h2>
+      <ul>
+        <li><b>인터넷 연결이 필요해요.</b> 글꼴, 수식(KaTeX), 계산 도구를 인터넷에서 불러옵니다.</li>
+        <li>크롬, 엣지, 웨일 등 최신 브라우저를 권장해요.</li>
+        <li>교실 TV(1920×1080), 태블릿, 노트북, 휴대폰에서 모두 쓸 수 있어요. 그래프는 손가락으로 끌고 확대할 수 있어요.</li>
+        <li>설치나 회원 가입은 필요 없어요.</li>
+      </ul>
+    </div>
+    <div class="pz-card">
+      <h2>앱 위쪽 막대</h2>
+      <ul>
+        <li><b>가 · 가+ · 가++</b> 글자 크기 (교실 뒤쪽까지 보이게)</li>
+        <li><b>⛶ 발표 모드</b> 전체 화면으로 크게</li>
+        <li><b>📖 사용법</b> 이 앱의 수업 슬라이드 열기</li>
+        <li><b>⟲ 기록 지우기</b> 푼 기록을 지우고 처음부터. 1-3, 3-4, 3-5는 학생 기록이 기기에 저장되니, 공용 기기라면 다음 반 수업 전에 눌러 주세요.</li>
+      </ul>
+    </div>
+    <div class="pz-card">
+      <h2>수업 슬라이드 조작</h2>
+      <ul>
+        <li><kbd>→</kbd> 다음 단계 · <kbd>←</kbd> 이전 · <kbd>Space</kbd> 한 장 전부 보기</li>
+        <li><kbd>F</kbd> 전체 화면 · <kbd>T</kbd> 밝은/어두운 테마</li>
+        <li><kbd>N</kbd> 발표자 메모(발문·예상 답·시간) · <kbd>P</kbd> 발표자 창</li>
+        <li>앱이 들어간 장에서는 <b>새 창에서 열기</b>로 앱만 크게 띄울 수 있어요.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="unit u1" id="unit1" aria-labelledby="unit1-title">
+    <div class="unit-head"><h2 id="unit1-title">Ⅰ. 함수의 극한과 연속</h2><p>앱 3개</p></div>
+    <div class="cards">
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">1-1</span><span class="app-name">함수의 극한 탐구</span></div>
+        <h3>함수의 극한</h3>
+        <p class="app-desc">x를 기준점에 조금씩 가까이 가져가며 좌극한과 우극한이 같은지 다른지 직접 확인해요.</p>
+        <p class="app-meta">탭 3개 · 수업 슬라이드 12장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/1-1.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/1-1.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">1-2</span><span class="app-name">극한의 성질 학습</span></div>
+        <h3>극한의 성질</h3>
+        <p class="app-desc">극한의 성질이 언제 성립하고 언제 무너지는지 실험하고, 오개념 명제를 판결하고, 0/0 꼴을 식 변형으로 풀어요.</p>
+        <p class="app-meta">탭 3개(검증실 · 법정 · 수술실) · 수업 슬라이드 12장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/1-2.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/1-2.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">1-3</span><span class="app-name">함수의 연속 탐구</span></div>
+        <h3>함수의 연속</h3>
+        <p class="app-desc">그래프를 관찰하고 연속의 세 조건으로 연속성을 판정해요. 끊어진 함수를 연속함수로 만들어 보고 자기평가까지 남겨요.</p>
+        <p class="app-meta">필수 6 · 도전 3문항 · 기록 저장 · 수업 슬라이드 11장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/1-3.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/1-3.html">📖 수업 슬라이드</a></div>
+      </article>
+    </div>
+  </section>
+
+  <section class="unit u2" id="unit2" aria-labelledby="unit2-title">
+    <div class="unit-head"><h2 id="unit2-title">Ⅱ. 미분</h2><p>앱 9개</p></div>
+    <div class="cards">
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">2-1</span><span class="app-name">미분계수의 정의</span></div>
+        <h3>미분계수의 정의</h3>
+        <p class="app-desc">할선의 기울기가 접선의 기울기에 가까워지는 과정을 단계별로 관찰해요.</p>
+        <p class="app-meta">6단계 · 수업 슬라이드 12장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/2-1.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/2-1.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">2-2</span><span class="app-name">미분가능성과 연속 사이의 관계</span></div>
+        <h3>미분가능성과 연속</h3>
+        <p class="app-desc">한 점에서 연속성과 좌·우 미분계수를 비교하며, 미분가능하면 연속이지만 그 역은 아님을 확인해요.</p>
+        <p class="app-meta">7단계 · 수업 슬라이드 12장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/2-2.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/2-2.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">2-3</span><span class="app-name">도함수의 뜻</span></div>
+        <h3>도함수의 뜻</h3>
+        <p class="app-desc">할선이 접선으로 수렴하는 과정, 다항함수의 미분 공식, 상수배·합·차의 성질을 그래프로 직접 확인해요.</p>
+        <p class="app-meta">탭 4개 · 수업 슬라이드 12장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/2-3.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/2-3.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">2-4-1</span><span class="app-name">접선을 찾아서</span></div>
+        <h3>도함수의 활용 1 · 접선의 방정식</h3>
+        <p class="app-desc">할선이 접선이 되는 순간을 관찰하고, 접점·기울기·곡선 밖의 점이 주어진 접선 문제를 그래프와 함께 풀어요.</p>
+        <p class="app-meta">탭 5개 · 수업 슬라이드 12장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/2-4-1.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/2-4-1.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">2-4-2</span><span class="app-name">그 순간을 찾아서</span></div>
+        <h3>도함수의 활용 2 · 평균값 정리</h3>
+        <p class="app-desc">구간의 평균변화율과 같은 순간변화율이 나타나는 지점을 직접 찾고, 생활 속 상황에도 적용해요.</p>
+        <p class="app-meta">탭 3개 · 수업 슬라이드 12장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/2-4-2.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/2-4-2.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">2-4-3</span><span class="app-name">부호를 따라서</span></div>
+        <h3>도함수의 활용 3 · 증가·감소, 극대·극소</h3>
+        <p class="app-desc">f′(x)의 부호가 바뀌는 순간을 따라가며 증가·감소와 극값의 관계를 확인하고, 증감표로 정리해요.</p>
+        <p class="app-meta">탭 4개 · 수업 슬라이드 12장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/2-4-3.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/2-4-3.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">2-4-4</span><span class="app-name">삼차함수의 그래프</span></div>
+        <h3>도함수의 활용 4 · 삼차함수의 그래프</h3>
+        <p class="app-desc">직접 만든 삼차함수로 개형, 대칭의 중심, 방정식 f(x) = k의 실근 개수를 탐구해요.</p>
+        <p class="app-meta">탭 4개 · 수업 슬라이드 12장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/2-4-4.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/2-4-4.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">2-4-5</span><span class="app-name">사차함수의 그래프</span></div>
+        <h3>도함수의 활용 5 · 사차함수의 그래프</h3>
+        <p class="app-desc">직접 만든 사차함수로 극값의 개수와 그래프 개형이 어떻게 결정되는지 탐구해요.</p>
+        <p class="app-meta">탭 5개 · 수업 슬라이드 12장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/2-4-5.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/2-4-5.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">2-4-6</span><span class="app-name">속도와 가속도</span></div>
+        <h3>도함수의 활용 6 · 속도와 가속도</h3>
+        <p class="app-desc">위치함수를 직접 만들고 속도·가속도를 관찰하며 정지, 방향 전환, 가속·감속을 판단해요.</p>
+        <p class="app-meta">탭 5개 · 수업 슬라이드 12장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/2-4-6.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/2-4-6.html">📖 수업 슬라이드</a></div>
+      </article>
+    </div>
+  </section>
+
+  <section class="unit u3" id="unit3" aria-labelledby="unit3-title">
+    <div class="unit-head"><h2 id="unit3-title">Ⅲ. 적분</h2><p>앱 5개</p></div>
+    <div class="cards">
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">3-1</span><span class="app-name">원래 함수를 찾아라</span></div>
+        <h3>부정적분의 뜻</h3>
+        <p class="app-desc">도함수로부터 원래 함수를 찾고, 적분상수 C가 그래프를 어떻게 바꾸는지 탐구해요.</p>
+        <p class="app-meta">탭 4개 · 수업 슬라이드 12장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/3-1.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/3-1.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">3-2</span><span class="app-name">부호 있는 넓이 저울</span></div>
+        <h3>정적분의 뜻</h3>
+        <p class="app-desc">x축 위쪽은 양의 넓이, 아래쪽은 음의 넓이로 세는 정적분의 뜻을 직선 그래프로 확인해요.</p>
+        <p class="app-meta">탭 4개 · 수업 슬라이드 11장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/3-2.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/3-2.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">3-3</span><span class="app-name">넓이가 자라는 함수</span></div>
+        <h3>적분과 미분의 관계</h3>
+        <p class="app-desc">위끝 x가 변할 때 넓이 S(x)의 순간변화율이 f(x)와 같아짐을 확인해요.</p>
+        <p class="app-meta">탭 4개 · 수업 슬라이드 12장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/3-3.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/3-3.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">3-4</span><span class="app-name">넓이는 그대로!</span></div>
+        <h3>정적분과 넓이</h3>
+        <p class="app-desc">곡선을 옮겨도 넓이가 변하지 않을 때를 찾고, 두 곡선 사이의 넓이를 구해요.</p>
+        <p class="app-meta">탭 4개 · 기록 저장 · 수업 슬라이드 11장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/3-4.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/3-4.html">📖 수업 슬라이드</a></div>
+      </article>
+      <article class="pz-card app-card">
+        <div class="app-top"><span class="pz-badge">3-5</span><span class="app-name">로봇 경주</span></div>
+        <h3>속도와 거리</h3>
+        <p class="app-desc">로봇의 움직임으로 위치의 변화량과 움직인 거리의 차이를 비교해요.</p>
+        <p class="app-meta">탭 4개 · 기록 저장 · 수업 슬라이드 11장</p>
+        <div class="app-btns"><a class="pz-btn pz-btn-primary" href="apps/3-5.html">열기</a><a class="pz-btn pz-btn-ghost" href="guides/3-5.html">📖 수업 슬라이드</a></div>
+      </article>
+    </div>
+  </section>
+
+  <p class="hub-foot">✏️ made by 지인섭</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>극한의 성질 · 검증하고 판결하고 수술하라</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/14.8.1/math.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<style>
+  /* [2단계 디자인] 공통 테마(복숭아 하늘) 적용. 글꼴·바탕은 테마(PZ 블록)가 정한다. */
+
+  /* 앱 고유 변수 → 테마 토큰 연결 (하드코딩 색 금지) */
+  :root {
+    --bg: var(--pz-bg);
+    --panel: var(--pz-panel);
+    --panelSoft: var(--pz-soft);
+    --border: var(--pz-line);
+    --borderSoft: var(--pz-line);
+    --textPrimary: var(--pz-ink);
+    --textMuted: var(--pz-muted);
+    --textFaint: var(--pz-muted);     /* 보조 글자는 --pz-muted 보다 옅게 쓰지 않는다 */
+    --accent: var(--pz-accent-btn);
+    --accentSoft: var(--pz-accent-soft);
+    --accentLine: var(--pz-line2);
+    --fcolor: var(--pz-f);  --fInk: var(--pz-sky-ink);  --fcolorBg: var(--pz-sky-soft);    /* f(x) = 하늘 */
+    --gcolor: var(--pz-g);  --gInk: var(--pz-lav-ink);  --gcolorBg: var(--pz-lav-soft);    /* g(x) = 라벤더 */
+    --rcolor: var(--pz-butter-line); --rInk: var(--pz-butter-ink); --rBg: var(--pz-butter-soft); /* f∘g(결과) = 버터 */
+    --okgreen: var(--pz-ok-ink);  --okgreenBg: var(--pz-ok-soft);
+    --warnred: var(--pz-bad-ink); --warnredBg: var(--pz-bad-soft);
+    --gold: var(--pz-warn-ink);   --goldBg: var(--pz-warn-soft);
+    --chartH: 420px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+
+  /* 한 줄 소개 + 탭 */
+  .tabs { margin-bottom: 16px; }
+  .tabBtn { white-space: nowrap; }
+
+  /* ===== 탭 패널: 1099px 이하 = [머리 → 그래프 → 조작 → 결과] 한 줄,
+           1100px 이상 = 왼쪽 [머리·조작·결과] + 오른쪽 그래프(sticky) ===== */
+  .tabPanel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .tabPanel > * { min-width: 0; margin: 0; }
+  @media (min-width: 1100px) {
+    .tabPanel {
+      grid-template-columns: minmax(340px, 1fr) minmax(0, 1.35fr);
+      grid-template-rows: auto auto auto 1fr;
+      grid-template-areas: "head graph" "ctrl graph" "sol graph" ". graph";
+      column-gap: 20px; align-items: start;
+    }
+    .aHead { grid-area: head; } .aCtrl { grid-area: ctrl; } .aSol { grid-area: sol; }
+    .aGraph { grid-area: graph; align-self: start; }
+  }
+  @media (max-width: 1099px) {
+    .aHead { order: 1; } .aGraph { order: 2; } .aCtrl { order: 3; } .aSol { order: 4; }
+  }
+  .graphCol { display: flex; flex-direction: column; gap: 16px; }
+  /* [2단계] 높이가 모자랄 때(가++ 등): 결과 카드는 왼쪽 열(sol)로, 그래프 카드만 오른쪽에 고정 — JS fitChart가 .resultsLeft를 켬 */
+  @media (min-width: 1100px) {
+    .resultsLeft .graphCol { display: contents; }
+    .resultsLeft .graphCol > .graphCard { grid-area: graph; align-self: start; position: sticky; top: calc(var(--pz-topbar-h) + 12px); }
+    .resultsLeft .graphCol > .resCard { grid-area: sol; }
+  }
+
+  /* 카드 */
+  .card {
+    background: var(--pz-panel); border: 2px solid var(--pz-line); border-radius: var(--pz-r-lg);
+    padding: 18px 20px; box-shadow: var(--pz-shadow);
+  }
+  .softBox { background: var(--pz-soft); border-radius: var(--pz-r-md); padding: 12px 16px; }
+  .cardTitle, .label { font-family: var(--pz-font-title); font-weight: 400; font-size: 19px; color: var(--pz-ink); margin: 0 0 10px; }
+  .sub { font-size: 15.5px; color: var(--pz-ink2); margin: 0 0 12px; line-height: 1.65; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .headRow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .mono { font-family: 'JetBrains Mono', var(--pz-mono); }
+
+  .btnSm { padding: 9px 15px; font-size: 15px; }
+  .hint { font-size: 15px; color: var(--pz-muted); margin-top: 6px; line-height: 1.6; }
+
+  /* 그래프 카드 */
+  .graphCard { padding: 14px 16px 12px; }
+  /* 주의: 맨 canvas 선택자는 테마의 축하(컨페티) 캔버스까지 덮으므로 그래프 카드 안으로 한정 */
+  .graphCard canvas { width: 100%; height: var(--chartH); display: block; border-radius: var(--pz-r-md); margin: 0; background: var(--pz-panel); }
+  .graphFoot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+  /* --- 슬라이더 --- */
+  .sym { color: var(--fInk); font-family: 'JetBrains Mono', var(--pz-mono); font-weight: 700; font-size: 17px; }
+  .slabel { font-size: 15.5px; color: var(--pz-ink2); font-weight: 500; }
+  .letter { width: 16px; font-weight: 700; color: var(--pz-ink2); }
+  input[type=range] { flex: 1; min-width: 0; }
+  .sliderRow { min-height: 46px; }   /* 배치는 theme.css .pz-slider-row */
+  input[type=number] { min-height: 44px; }   /* 모양·포커스는 theme.css */
+  .miniInput { width: 100px; }
+  .targetBox { background: var(--pz-accent-soft); border-radius: var(--pz-r-md); padding: 12px 16px; }
+  .targetBox .slabel { color: var(--pz-accent-ink); font-weight: 700; }
+  .targetBox .letter { color: var(--pz-accent-ink); }
+
+  /* --- 선택 칩 (.pz-chip 모양) --- */
+  .chipGroup { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  .chip {
+    display: inline-flex; align-items: center; justify-content: center; padding: 8px 14px; border-radius: var(--pz-r-pill);
+    border: 2px solid var(--pz-line); background: var(--pz-panel); color: var(--pz-ink2);
+    font-size: 15px; font-weight: 600; cursor: pointer; font-family: 'JetBrains Mono', var(--pz-mono); min-height: 44px;
+  }
+  .chip:hover { border-color: var(--pz-accent); }
+  .chip.active { background: var(--pz-accent-soft); border-color: var(--pz-accent); color: var(--pz-accent-ink); }
+  .chip.gchip.active { background: var(--gcolorBg); border-color: var(--gcolor); color: var(--gInk); }
+  .opChip { min-width: 56px; font-size: 19px; padding: 6px 12px; }
+  .gName { color: var(--gInk); font-weight: 700; font-family: 'JetBrains Mono', var(--pz-mono); }
+
+  .legend { display: flex; gap: 16px; font-size: 15px; color: var(--pz-ink2); font-weight: 600; flex-wrap: wrap; margin-bottom: 8px; }
+  .dot { display: inline-block; width: 18px; height: 4px; border-radius: var(--pz-r-pill); margin-right: 6px; vertical-align: middle; }
+
+  /* --- 결과 비교 카드 --- */
+  .limGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+  .limPill { border-radius: var(--pz-r-md); padding: 11px 14px; min-width: 0; }
+  .limLabel { font-size: 15px; font-weight: 700; margin-bottom: 2px; overflow-x: auto; overflow-y: hidden; }
+  .limLabel .katex { display: block; margin-top: 4px; }   /* [수식] 이름(① 실제:) 아래 줄에 식 */
+  .limValue { font-family: 'JetBrains Mono', var(--pz-mono); font-size: 21px; font-weight: 700; overflow-wrap: anywhere; }
+  .pillF { background: var(--fcolorBg); color: var(--fInk); }
+  .pillG { background: var(--gcolorBg); color: var(--gInk); }
+  .pillR { background: var(--rBg); color: var(--rInk); }
+  .pillP { background: var(--pz-panel); color: var(--pz-ink2); border: 2px dashed var(--pz-line2); }
+  .verdictBox { margin-top: 12px; border-radius: var(--pz-r-md); padding: 13px 16px; font-size: 15.5px; line-height: 1.65; font-weight: 600; }
+  .verdictBox.ok { background: var(--pz-ok-soft); color: var(--pz-ok-ink); }
+  .verdictBox.bad { background: var(--pz-bad-soft); color: var(--pz-bad-ink); }
+  .verdictBox.warn { background: var(--pz-warn-soft); color: var(--pz-warn-ink); }
+  .funcVal { font-size: 15px; font-weight: 600; color: var(--pz-ink2); margin-top: 8px; line-height: 1.55; }
+
+  /* --- 법정 (같은 카드 언어) --- */
+  .caseHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+  .caseNum { display: inline-block; font-size: 14px; font-weight: 700; color: var(--pz-accent-ink); background: var(--pz-accent-soft); padding: 5px 12px; border-radius: var(--pz-r-pill); letter-spacing: .5px; margin-bottom: 6px; }
+  .scoreBadge { background: var(--pz-panel); color: var(--pz-ink2); border: 2px solid var(--pz-line); border-radius: var(--pz-r-pill); padding: 7px 16px; font-size: 15px; font-weight: 700; }
+  .statementBox { background: var(--pz-soft); border-radius: var(--pz-r-md); padding: 18px 20px; font-size: 17px; line-height: 1.85; margin-bottom: 14px; font-weight: 600; color: var(--pz-ink); }
+  .statementBox .mono { color: var(--pz-accent-ink); font-size: 16px; }
+  .judgeBtns { display: flex; gap: 12px; flex-wrap: wrap; }
+  .judgeBtn { flex: 1 1 160px; padding: 15px; font-size: 17px; min-height: 56px; }
+  .btnGuilty { background: var(--pz-bad-soft); color: var(--pz-bad-ink); box-shadow: 0 0 0 2px var(--pz-bad) inset, 0 4px 0 var(--pz-bad); }
+  .btnInnocent { background: var(--pz-ok-soft); color: var(--pz-ok-ink); box-shadow: 0 0 0 2px var(--pz-ok) inset, 0 4px 0 var(--pz-ok); }
+  .judgeBtn:disabled { opacity: 0.45; cursor: default; box-shadow: 0 0 0 2px var(--pz-line) inset; }
+  .judgeBtn.picked { opacity: 1; outline: 3px solid var(--pz-accent); outline-offset: 2px; }
+  .revealBox { margin-top: 14px; display: none; }
+  .revealTitle { font-family: var(--pz-font-title); font-weight: 400; font-size: 21px; margin-bottom: 8px; }
+  .revealTitle.correct { color: var(--pz-ok-ink); }
+  .revealTitle.wrong { color: var(--pz-bad-ink); }
+  .revealExplain { font-size: 15.5px; color: var(--pz-ink2); line-height: 1.85; }
+  .revealExplain .mono { color: var(--pz-ink); font-size: 15px; }
+  .navRow { display: flex; justify-content: space-between; margin-top: 16px; gap: 10px; flex-wrap: wrap; }
+  .evPH { display: grid; place-items: center; min-height: 260px; text-align: center; color: var(--pz-muted); font-size: 15.5px; line-height: 1.7; }
+  #evidenceCard:not(.isOpen) .evBody { display: none; }
+  #evidenceCard.isOpen .evPH { display: none; }
+
+  /* --- 수술실 (같은 카드 언어) --- */
+  .patientTabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .ptab { flex: 1 1 0; min-width: 96px; padding: 9px 12px; border-radius: var(--pz-r-pill); border: 2px solid var(--pz-line); background: var(--pz-panel); color: var(--pz-ink2); font-size: 15px; font-weight: 700; text-align: center; cursor: pointer; min-height: 44px; }
+  .ptab.active { background: var(--pz-accent-soft); border-color: var(--pz-accent); color: var(--pz-accent-ink); }
+  .ptab.done { border-color: var(--pz-ok); color: var(--pz-ok-ink); }
+  .ptab.done.active { background: var(--pz-ok-soft); }
+  .exprCard { background: var(--pz-soft); border-radius: var(--pz-r-md); padding: 14px 16px; }
+  .exprLine { font-family: 'JetBrains Mono', var(--pz-mono); font-size: 19px; text-align: center; padding: 12px 6px; line-height: 1.75; word-break: keep-all; color: var(--pz-ink); }
+  /* [수식] 극한 기호는 KaTeX로 (1-3과 같은 방식). x→a는 lim 아래에 */
+  .katex { font-size: 1.15em; white-space: nowrap; }   /* 글 중간 식은 + 뒤에서 끊지 않는다 */
+  .katex-display { margin: .5em 0; overflow-x: auto; overflow-y: hidden; }
+  .exprLine { overflow-x: auto; }
+  .exprLine .answer { color: var(--pz-ok-ink); font-weight: 800; font-size: 24px; }
+  /* 진단 배지: 0/0(로즈) / 수술 진행 중(버터) / 완치(민트) */
+  .diagBadge { display: inline-block; background: var(--pz-bad-soft); color: var(--pz-bad-ink); border-radius: var(--pz-r-pill); padding: 6px 15px; font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+  .diagBadge.progress { background: var(--pz-warn-soft); color: var(--pz-warn-ink); }
+  .diagBadge.healed { background: var(--pz-ok-soft); color: var(--pz-ok-ink); }
+  .diagBadge.healed::before { content: "✓ "; }
+  .toolRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 10px; margin-top: 14px; }
+  .toolBtn { min-height: 54px; font-size: 16px; }
+  .toolBtn:hover { box-shadow: 0 0 0 2px var(--pz-accent) inset; color: var(--pz-accent-ink); }
+  .toolBtn:disabled { opacity: 0.45; cursor: default; }
+  .toolMsg { min-height: 24px; font-size: 15.5px; font-weight: 700; margin-top: 12px; text-align: center; border-radius: var(--pz-r-md); padding: 10px 14px; background: var(--pz-info-soft); color: var(--pz-info-ink); }
+  .toolMsg:empty { display: none; }
+  .toolMsg.good { background: var(--pz-ok-soft); color: var(--pz-ok-ink); }
+  .toolMsg.badmsg { background: var(--pz-bad-soft); color: var(--pz-bad-ink); }
+  .stepTrail { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
+  .stepDot { width: 12px; height: 12px; border-radius: 50%; background: var(--pz-line2); }
+  .stepDot.on { background: var(--pz-accent-btn); }
+
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+  .shake { animation: shake 0.3s ease; }
+
+  /* --- 키패드 --- */
+  .exprDisplay { background: var(--pz-soft); border-radius: var(--pz-r-md); padding: 13px 16px;
+    font-family: 'JetBrains Mono', var(--pz-mono); font-size: 19px; color: var(--pz-ink); font-weight: 600;
+    min-height: 28px; margin-bottom: 12px; word-break: break-all; }
+  .keypad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
+  .key { background: var(--pz-panel); border: 2px solid var(--pz-line); border-radius: var(--pz-r-input);
+    padding: 10px 4px; min-height: 46px; font-size: 16px; font-weight: 700; color: var(--pz-ink); cursor: pointer;
+    text-align: center; font-family: 'JetBrains Mono', var(--pz-mono); display:flex; align-items:center; justify-content:center; }
+  .key:hover { border-color: var(--pz-accent); }
+  .key.var { color: var(--pz-accent-ink); background: var(--pz-accent-soft); border-color: transparent; }
+  .key.fn { color: var(--pz-sky-ink); background: var(--pz-sky-soft); border-color: transparent; font-size: 15px; }
+  .key.op { color: var(--pz-ink2); background: var(--pz-soft); border-color: transparent; }
+  .key.clear { color: var(--pz-rose-ink); background: var(--pz-rose-soft); border-color: transparent; }
+  .key.wide { grid-column: span 5; margin-top: 4px; min-height: 50px; font-family: var(--pz-font); font-size: 16px; border: 0;
+    background: var(--pz-accent-btn); color: #fff; box-shadow: 0 5px 0 var(--pz-accent-deep); }
+  .key.wide:active { box-shadow: 0 2px 0 var(--pz-accent-deep); transform: translateY(3px); }
+  .customErr { min-height: 20px; text-align: center; font-weight: 700; }
+  .customErr.ok { color: var(--pz-ok-ink); } .customErr.bad { color: var(--pz-bad-ink); }
+
+  .tip { font-size: 15px; color: var(--pz-muted); margin-top: 18px; line-height: 1.65; }
+  .footer { text-align: center; font-size: 13px; color: var(--pz-muted); margin-top: 24px; }
+  @media (max-width: 520px) { .limGrid { grid-template-columns: 1fr; } }
+</style>
+<!-- PZ:HEAD -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../shared/theme.css">
+<script type="application/json" id="pz-meta">{"slug": "1-2", "unit": "1-2", "title": "극한의 성질 학습", "group": null, "home": "../index.html", "guide": "../guides/1-2.html"}</script>
+<script id="pz-ui" src="../shared/ui.js"></script>
+<!-- /PZ:HEAD -->
+</head>
+<body>
+<div class="wrap pz-wrap">
+  <!-- [2단계] 상단 바가 단원·제목을 보여 주므로 앱 제목(h1)·눈썹 문구는 지우고 한 줄 소개만 남김 -->
+  <p class="desc pz-desc">극한의 성질이 언제 성립하고 언제 무너지는지 직접 실험해보고, 오개념 명제를 판결하고, 0/0 환자를 수술해보세요.</p>
+
+  <div class="tabs pz-tabs" role="tablist">
+    <button class="tabBtn pz-tab active" id="tabBtn1" onclick="showTab(1)" role="tab" aria-selected="true">1. 검증실</button>
+    <button class="tabBtn pz-tab" id="tabBtn2" onclick="showTab(2)" role="tab" aria-selected="false">2. 법정</button>
+    <button class="tabBtn pz-tab" id="tabBtn3" onclick="showTab(3)" role="tab" aria-selected="false">3. 수술실</button>
+  </div>
+
+  <!-- ================= TAB 1 : 검증실 ================= -->
+  <div id="tab1" class="tabPanel">
+    <section class="card aHead">
+      <h3 class="cardTitle tex" id="verifyTitle">🔬 성질 검증실 — \(\lim\limits_{x\to a}\{f(x)+g(x)\}\) 와 \(\lim\limits_{x\to a} f(x)+\lim\limits_{x\to a} g(x)\) 는 항상 같을까?</h3>
+      <div class="sub">먼저 x가 가까이 갈 목표 지점 a를 정하세요. f(x)는 슬라이더로 조작하고, g(x)와 연산(+, −, ×, ÷)을 골라 두 계산 결과를 비교해보세요.</div>
+
+      <div class="sliderBlock pz-slider-block targetBox" style="margin-bottom:0">
+        <div class="sliderTop pz-slider-top"><span class="slabel">🎯 목표 지점 — x 가 어디로 가까이 갈까요? <span class="mono">x → a</span></span></div>
+        <div class="sliderRow pz-slider-row">
+          <span class="slabel mono letter">a</span>
+          <input type="range" id="sliderTA" min="-2" max="4" step="0.1">
+          <input type="number" id="numTA" class="miniInput" step="0.1">
+        </div>
+        <div class="hint">좌표평면의 세로 점선(x=a)과 그 위의 점들이 함께 움직입니다.</div>
+      </div>
+    </section>
+
+    <section class="card aCtrl">
+      <div class="sliderBlock pz-slider-block">
+        <div class="sliderTop pz-slider-top"><span class="slabel"><span class="sym">f(x) = mx + n</span></span></div>
+        <div class="sliderRow pz-slider-row">
+          <span class="slabel mono letter">m</span>
+          <input type="range" id="sliderFA" min="-4" max="4" step="0.1">
+          <input type="number" id="numFA" class="miniInput" step="0.1">
+        </div>
+        <div class="sliderRow pz-slider-row" style="margin-top:4px">
+          <span class="slabel mono letter">n</span>
+          <input type="range" id="sliderFB" min="-4" max="4" step="0.1">
+          <input type="number" id="numFB" class="miniInput" step="0.1">
+        </div>
+        <div class="hint">💡 m=1, n=-1 로 맞추면 f(x)=x-1 이 됩니다. <span class="pz-term" data-tip="발산">발산</span>하는 g와 곱해보면...?</div>
+        <div class="pz-reset-row"><button class="pz-btn pz-btn-ghost btnSm" onclick="resetVerifyValues()">↺ 처음 값으로</button></div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div class="slabel" style="margin-bottom:6px"><span class="gName">g(x)</span> 선택</div>
+        <div class="chipGroup" id="gChips"></div>
+        <div id="customGBox" style="display:none;margin-top:10px">
+          <div class="exprDisplay" id="gExprDisplay">g(x)&nbsp;=&nbsp;</div>
+          <div class="keypad">
+            <button type="button" class="key var" onclick="appendGToken('x')">x</button>
+            <button type="button" class="key" onclick="appendGToken('(')">(</button>
+            <button type="button" class="key" onclick="appendGToken(')')">)</button>
+            <button type="button" class="key op" onclick="appendGToken('^')">xʸ</button>
+            <button type="button" class="key clear" onclick="backspaceG()">⌫</button>
+
+            <button type="button" class="key fn" onclick="appendGToken('sin(')">sin</button>
+            <button type="button" class="key fn" onclick="appendGToken('cos(')">cos</button>
+            <button type="button" class="key fn" onclick="appendGToken('tan(')">tan</button>
+            <button type="button" class="key fn" onclick="appendGToken('sqrt(')">√</button>
+            <button type="button" class="key fn" onclick="appendGToken('abs(')">|x|</button>
+
+            <button type="button" class="key" onclick="appendGToken('7')">7</button>
+            <button type="button" class="key" onclick="appendGToken('8')">8</button>
+            <button type="button" class="key" onclick="appendGToken('9')">9</button>
+            <button type="button" class="key op" onclick="appendGToken('/')">÷</button>
+            <button type="button" class="key fn" onclick="appendGToken('pi')">π</button>
+
+            <button type="button" class="key" onclick="appendGToken('4')">4</button>
+            <button type="button" class="key" onclick="appendGToken('5')">5</button>
+            <button type="button" class="key" onclick="appendGToken('6')">6</button>
+            <button type="button" class="key op" onclick="appendGToken('*')">×</button>
+            <button type="button" class="key clear" onclick="clearG()">C</button>
+
+            <button type="button" class="key" onclick="appendGToken('1')">1</button>
+            <button type="button" class="key" onclick="appendGToken('2')">2</button>
+            <button type="button" class="key" onclick="appendGToken('3')">3</button>
+            <button type="button" class="key op" onclick="appendGToken('-')">−</button>
+            <button type="button" class="key var" onclick="appendGToken('(x-1)')">(x-1)</button>
+
+            <button type="button" class="key" onclick="appendGToken('0')">0</button>
+            <button type="button" class="key" onclick="appendGToken('.')">.</button>
+            <button type="button" class="key op" onclick="appendGToken('+')">+</button>
+            <button type="button" class="key var" onclick="appendGToken('(x+1)')">(x+1)</button>
+            <button type="button" class="key var" onclick="appendGToken('(x-1)^2')">(x-1)²</button>
+
+            <button type="button" class="key wide" onclick="applyCustomG()">이 식을 g(x)로 적용하기</button>
+          </div>
+          <div class="hint customErr" id="customGErr"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="slabel" style="margin-bottom:6px">연산 선택</div>
+        <div class="chipGroup" id="opChips"></div>
+      </div>
+    </section>
+
+    <div class="aGraph graphCol pz-sticky">
+      <section class="card graphCard">
+        <div class="legend">
+          <span><span class="dot" style="background:var(--fcolor)"></span>f(x)</span>
+          <span><span class="dot" style="background:var(--gcolor)"></span>g(x)</span>
+          <span><span class="dot" style="background:var(--rcolor)"></span><span id="legendR">f + g</span></span>
+        </div>
+        <canvas id="verifyChart" aria-label="f, g와 두 함수의 계산 결과 그래프, 목표 지점 x=a"></canvas>
+        <div class="graphFoot">
+          <div class="hint" style="margin:0">🤏 드래그로 이동 · 휠/두 손가락으로 확대·축소 · 세로 점선이 목표 지점 x=a</div>
+          <!-- [2단계] 그래프 위에 겹쳐 곡선을 가리던 초기화 버튼을 그래프 아래로 -->
+          <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="resetVerifyView()">↺ 보기 초기화</button>
+        </div>
+      </section>
+
+      <section class="card resCard">
+        <div class="funcVal" id="funcValNote" style="margin-top:0"></div>
+        <div class="limGrid">
+          <div class="limPill pillF">
+            <div class="limLabel tex" id="limFLabel">\(\lim\limits_{x\to a} f(x)\)</div>
+            <div class="limValue" id="limF"></div>
+          </div>
+          <div class="limPill pillG">
+            <div class="limLabel tex" id="limGLabel">\(\lim\limits_{x\to a} g(x)\)</div>
+            <div class="limValue" id="limG"></div>
+          </div>
+          <div class="limPill pillR">
+            <div class="limLabel tex" id="limRLabel">① 실제: \(\lim\limits_{x\to a}\{f(x)+g(x)\}\)</div>
+            <div class="limValue" id="limActual"></div>
+          </div>
+          <div class="limPill pillP">
+            <div class="limLabel tex" id="limPLabel">② 성질로: \(\lim\limits_{x\to a} f(x)+\lim\limits_{x\to a} g(x)\)</div>
+            <div class="limValue" id="limByProp"></div>
+          </div>
+        </div>
+        <div class="verdictBox ok" id="verifyVerdict"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ================= TAB 2 : 법정 ================= -->
+  <div id="tab2" class="tabPanel" style="display:none">
+    <section class="card aHead">
+      <div class="caseHeader">
+        <div>
+          <div class="caseNum" id="caseNum">CASE 1 / 6</div>
+          <h3 class="cardTitle" style="margin:0">⚖️ 극한 법정 — 이 명제, 유죄인가 무죄인가?</h3>
+        </div>
+        <div class="scoreBadge" id="scoreBadge">판결 0 / 6 · 정답 0</div>
+      </div>
+      <div class="sub">명제가 <b>항상 참이면 「무죄」</b>, <b>거짓(반례가 존재)이면 「유죄」</b>를 선고하세요. 판결 후 증거 그래프가 공개됩니다.</div>
+
+      <div class="statementBox" id="caseStatement"></div>
+
+      <div class="judgeBtns">
+        <button class="judgeBtn pz-btn btnGuilty" id="btnGuilty" onclick="judge(true)">🔨 유죄 (거짓!)</button>
+        <button class="judgeBtn pz-btn btnInnocent" id="btnInnocent" onclick="judge(false)">🕊️ 무죄 (항상 참)</button>
+      </div>
+
+      <div class="revealBox" id="revealBox">
+        <div class="revealTitle" id="revealTitle"></div>
+        <div class="revealExplain" id="revealExplain"></div>
+      </div>
+
+      <div class="navRow">
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="prevCase()">← 이전 사건</button>
+        <button class="btnGhost pz-btn pz-btn-soft btnSm" id="rejudgeBtn" onclick="rejudge()" style="display:none">🔄 다시 판결하기</button>
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="nextCase()">다음 사건 →</button>
+      </div>
+    </section>
+
+    <section class="card graphCard aGraph pz-sticky" id="evidenceCard">
+      <div class="evBody" id="evidenceBox">
+        <h3 class="cardTitle">🔍 증거 그래프</h3>
+        <div class="legend" id="evidenceLegend"></div>
+        <canvas id="evidenceChart" aria-label="사건의 증거 그래프"></canvas>
+        <div class="hint" id="evidenceHint"></div>
+      </div>
+      <div class="evPH">⚖️ 판결을 내리면<br>여기에 증거 그래프가 공개됩니다.</div>
+    </section>
+  </div>
+
+  <!-- ================= TAB 3 : 수술실 ================= -->
+  <div id="tab3" class="tabPanel" style="display:none">
+    <section class="card aHead">
+      <h3 class="cardTitle">🏥 0/0 수술실 — 올바른 도구를 골라 극한을 살려내세요</h3>
+      <div class="sub">환자에게 x=a를 그대로 대입하면 0/0 이 되어버립니다. 알맞은 수술 도구를 순서대로 골라 식을 변형하면 <span class="pz-term" data-tip="극한값">극한값</span>이 드러납니다.</div>
+
+      <div class="patientTabs" id="patientTabs"></div>
+
+      <div class="exprCard">
+        <div id="diagBadge" class="diagBadge"></div>
+        <div class="exprLine" id="surgeryExpr"></div>
+        <div class="stepTrail" id="stepTrail"></div>
+      </div>
+    </section>
+
+    <section class="card graphCard aGraph pz-sticky">
+      <div class="legend"><span><span class="dot" style="background:var(--fcolor)"></span>y = (환자 함수)</span><span style="color:var(--pz-ink2)">○ = 구멍(정의 안 됨)</span></div>
+      <canvas id="surgeryChart" height="260" aria-label="환자 함수 그래프와 구멍"></canvas>
+      <div class="graphFoot">
+        <div class="hint" style="margin:0">🤏 구멍 근처를 확대해보세요 — 아무리 확대해도 구멍은 남아있습니다!</div>
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="resetSurgeryView()">↺ 보기 초기화</button>
+      </div>
+    </section>
+
+    <section class="card aCtrl">
+      <h3 class="cardTitle">🧰 수술 도구</h3>
+      <div class="toolRow" id="toolRow" style="margin-top:0"></div>
+      <div class="toolMsg" id="toolMsg"></div>
+      <div class="row" style="justify-content:center;margin-top:12px">
+        <button class="btnGhost pz-btn pz-btn-ghost btnSm" onclick="redoSurgery()">🔁 이 환자 처음부터 다시 수술하기</button>
+      </div>
+    </section>
+
+    <section class="card aSol">
+      <h3 class="cardTitle">🩺 수술 원리</h3>
+      <div class="sub" style="margin:0">x → a 는 <b>x ≠ a</b> 이면서 a에 가까워진다는 뜻입니다. 그래서 x ≠ a 에서 식이 같은 함수로 바꿔치기(약분)해도 극한값은 변하지 않습니다. 수술 전후 그래프가 구멍 하나 빼고 완전히 같은 이유죠.</div>
+    </section>
+  </div>
+
+  <p class="tip">Tip. 검증실에서 "성질 적용 불가"가 뜨는 조합을 최대한 많이 찾아보세요. 그 조합들이 바로 법정의 사건들과 연결됩니다.</p>
+  <p class="footer">✏️ made by 지인섭</p>
+</div>
+
+<script>
+/* [수식] 문자열 속 \( … \)(글 중간)와 \[ … \](따로 한 줄) 부분을 KaTeX로 그린다 (KaTeX를 못 불러오면 식 글자 그대로) */
+function texHTML(str){
+  const r = (t, d) => { try { return window.katex ? katex.renderToString(t, { throwOnError: false, displayMode: d }) : t; } catch (e) { return t; } };
+  return String(str).replace(/\\\[([\s\S]+?)\\\]/g, (m, t) => r(t, true)).replace(/\\\(([\s\S]+?)\\\)/g, (m, t) => r(t, false));
+}
+document.querySelectorAll('.tex').forEach(el => { el.innerHTML = texHTML(el.innerHTML); });
+/* ==================== [2단계] 테마 색·확대 비율·그래프 높이 ==================== */
+function tok(name){
+  if (window.PastelUI) return PastelUI.color(name);
+  let v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(), g = 0;
+  while (/^var\(/.test(v) && g++ < 6) v = getComputedStyle(document.documentElement).getPropertyValue(v.replace(/^var\(\s*|\s*\)$/g,'')).trim();
+  return v || '#888';
+}
+/* 그래프 역할 색 (그릴 때마다 테마에서 읽음): f = 하늘, g = 라벤더, f∘g·결과 = 버터, 기준선 x=a = 산호, 극한값 = 민트 */
+const C = {
+  get f(){ return tok('--pz-f'); },          get fInk(){ return tok('--pz-sky-ink'); },
+  get g(){ return tok('--pz-g'); },          get gInk(){ return tok('--pz-lav-ink'); },
+  get r(){ return tok('--pz-butter-line'); }, get rInk(){ return tok('--pz-butter-ink'); },
+  get ref(){ return tok('--pz-ref'); },      get refInk(){ return tok('--pz-accent-ink'); },
+  get ok(){ return tok('--pz-ok'); },        get okInk(){ return tok('--pz-ok-ink'); },
+};
+/* #pz-main 의 CSS zoom 때문에 getBoundingClientRect(화면 px)와 clientWidth(CSS px)가 다르다 → 비율을 직접 잰다 */
+function cssScale(el){
+  const r = el.getBoundingClientRect();
+  return (el.clientWidth > 0 && r.width > 0) ? r.width / el.clientWidth : 1;
+}
+const SPLIT_MQ = window.matchMedia('(min-width: 1100px)');
+let chartH = 420, currentTab = 1;
+/* 보이는 탭의 그래프 높이: 1100px 이상(스플릿)은 첫 화면·sticky 상태 모두에서 그래프 열(.aGraph)이 다 보이게,
+   1099px 이하는 폭의 62%, 화면 높이의 60% 이하 */
+function fitChart(n){
+  // [2단계] 검증실: 결과 카드를 그래프 열에 둘지(기본) 왼쪽으로 내릴지 정한다 (그래프가 340px보다 작아지면 왼쪽으로)
+  if (n === 1){
+    const p1 = document.getElementById('tab1');
+    if (p1.classList.contains('resultsLeft')) p1.classList.remove('resultsLeft');
+    fitChartCore(1);
+    if (SPLIT_MQ.matches && chartH < 340){ p1.classList.add('resultsLeft'); fitChartCore(1); }
+    return;
+  }
+  fitChartCore(n);
+}
+function fitChartCore(n){
+  const panel = document.getElementById('tab'+n);
+  const canvas = panel && panel.querySelector('.graphCard canvas');
+  if (!canvas || !canvas.clientWidth) return;
+  let col = canvas.closest('.aGraph');
+  if (getComputedStyle(col).display === 'contents') col = canvas.closest('.graphCard');   // 결과 카드를 왼쪽으로 내린 경우
+  const k = cssScale(canvas);
+  const cssW = canvas.clientWidth;
+  const vh = window.innerHeight / k;
+  let h;
+  if (SPLIT_MQ.matches){
+    const cr = col.getBoundingClientRect(), vr = canvas.getBoundingClientRect();
+    const top0 = (cr.top + window.scrollY) / k;
+    const chrome = (cr.height - vr.height) / k;
+    const bar = (document.querySelector('.pz-topbar') || {offsetHeight:64}).offsetHeight / k;
+    const fitFirst = vh - Math.min(top0, vh * 0.45) - chrome - 16;
+    const fitSticky = vh - bar - 12 / k - chrome - 24;
+    h = Math.max(300, Math.min(fitFirst, fitSticky, cssW * (canvas.id === 'evidenceChart' ? 1.0 : 0.9)));
+  } else {
+    h = Math.max(280, Math.min(cssW * 0.62, vh * 0.6));
+  }
+  h = Math.round(h);
+  if (h !== chartH){ chartH = h; document.documentElement.style.setProperty('--chartH', h + 'px'); }
+}
+
+/* ==================== 공통: 그래프 엔진 ==================== */
+// [2단계] 그리기와 드래그(attachPanZoom)가 같은 여백을 쓴다
+const CHART_PAD = { l:46, r:14, t:14, b:28 };
+const CHART_FONT = '"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+function haloText(ctx, text, x, y, color){
+  ctx.save();
+  ctx.lineJoin = 'round'; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = color; ctx.fillText(text, x, y);
+  ctx.restore();
+}
+// limitDots: [{x, y, color, ink, label}] — 극한 수렴점 마커
+function drawLineChart(canvas, xMin, xMax, yMin, yMax, curves, xTickFn, gapThreshold, limitDots) {
+  // [2단계] 높이는 CSS(--chartH)가 정하고 여기서는 읽기만 한다 → 다시 그릴 때 높이가 바뀌지 않음
+  //         ([수정] dpr 2에서 다시 그릴 때마다 높이가 2배가 되던 문제는 height 속성을 읽지 않으므로 생기지 않음)
+  // [2단계] 글자 크기(zoom)만큼 화면에서 커지므로 그만큼 해상도를 올려 선명하게
+  const dpr = (window.devicePixelRatio || 1) * cssScale(canvas);
+  const cssW = canvas.clientWidth || 700;
+  const cssH = canvas.clientHeight || chartH;
+  canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const padL = CHART_PAD.l, padR = CHART_PAD.r, padT = CHART_PAD.t, padB = CHART_PAD.b;
+  const plotW = cssW - padL - padR, plotH = cssH - padT - padB;
+  function xPix(x){ return padL + (x-xMin)/(xMax-xMin)*plotW; }
+  function yPix(y){ return padT + (1-(y-yMin)/(yMax-yMin))*plotH; }
+
+  // ── nice-number 그리드: 좌표계에 고정되어 드래그 시 함께 이동 ──
+  function niceStep(range, targetCount) {
+    const rough = range / targetCount;
+    const exp = Math.floor(Math.log10(rough));
+    const pow = Math.pow(10, exp);
+    const frac = rough / pow;
+    let nice;
+    if (frac < 1.5)      nice = 1;
+    else if (frac < 3)   nice = 2;
+    else if (frac < 7)   nice = 5;
+    else                 nice = 10;
+    return nice * pow;
+  }
+  function fmtTick(v, step) {
+    // 소수점 자릿수를 step에 맞춰 자동 결정
+    const dec = Math.max(0, -Math.floor(Math.log10(step)));
+    const s = v.toFixed(dec);
+    return /^-0(\.0+)?$/.test(s) ? '0' : s;
+  }
+
+  const xStep = niceStep(xMax - xMin, Math.max(4, Math.round(plotW/90)));
+  const yStep = niceStep(yMax - yMin, Math.max(4, Math.round(plotH/70)));
+
+  ctx.strokeStyle = tok('--pz-grid'); ctx.lineWidth = 1;
+  const xStart = Math.ceil(xMin / xStep - 1e-9) * xStep;
+  for (let x = xStart; x <= xMax + 1e-9; x += xStep) {
+    const px = xPix(x);
+    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT+plotH); ctx.stroke();
+  }
+  const yStart = Math.ceil(yMin / yStep - 1e-9) * yStep;
+  for (let y = yStart; y <= yMax + 1e-9; y += yStep) {
+    const py = yPix(y);
+    ctx.beginPath(); ctx.moveTo(padL, py); ctx.lineTo(padL+plotW, py); ctx.stroke();
+  }
+
+  // 눈금 라벨
+  ctx.fillStyle = tok('--pz-muted'); ctx.font = '500 13px ' + CHART_FONT;
+  ctx.textAlign = 'center';
+  for (let x = xStart; x <= xMax + 1e-9; x += xStep) {
+    // x=0 은 y축과 겹치므로 y축이 보이면 생략
+    if (Math.abs(x) < xStep * 1e-4 && xMin < 0 && xMax > 0) continue;
+    ctx.fillText(xTickFn ? xTickFn(x) : fmtTick(x, xStep), xPix(x), cssH-8);
+  }
+  ctx.textAlign = 'right';
+  for (let y = yStart; y <= yMax + 1e-9; y += yStep) {
+    if (Math.abs(y) < yStep * 1e-4 && yMin < 0 && yMax > 0) continue;
+    ctx.fillText(fmtTick(y, yStep), padL-7, yPix(y)+4.5);
+  }
+  // 좌표축 (0이 범위 안에 있으면 뚜렷하게 + 화살표 + 라벨)
+  function arrow(x1,y1,x2,y2){
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    const ang = Math.atan2(y2-y1, x2-x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8*Math.cos(ang - 0.42), y2 - 8*Math.sin(ang - 0.42));
+    ctx.lineTo(x2 - 8*Math.cos(ang + 0.42), y2 - 8*Math.sin(ang + 0.42));
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.strokeStyle = tok('--pz-axis'); ctx.fillStyle = tok('--pz-axis'); ctx.lineWidth = 1.6;
+  ctx.font = 'italic 700 15px ' + CHART_FONT;
+  if (yMin < 0 && yMax > 0) {
+    const y0 = yPix(0);
+    arrow(padL, y0, padL+plotW, y0);
+    ctx.textAlign = 'right'; ctx.fillStyle = tok('--pz-ink2');
+    ctx.fillText('x', padL+plotW-3, y0-8);
+    ctx.fillStyle = tok('--pz-axis');
+  }
+  if (xMin < 0 && xMax > 0) {
+    const x0 = xPix(0);
+    arrow(x0, padT+plotH, x0, padT);
+    ctx.textAlign = 'left'; ctx.fillStyle = tok('--pz-ink2');
+    ctx.fillText('y', x0+8, padT+13);
+  }
+
+  const tagSpots = [];
+  curves.forEach(curve => {
+    if (curve.vline !== undefined){
+      ctx.save();
+      const vlx = xPix(curve.vline);
+      const vlineColor = curve.color || C.ref;
+      // 점선 수직선
+      ctx.strokeStyle = vlineColor; ctx.lineWidth = curve.vlineWidth || 2; ctx.setLineDash([6,5]);
+      ctx.beginPath(); ctx.moveTo(vlx, padT); ctx.lineTo(vlx, padT+plotH); ctx.stroke();
+      ctx.setLineDash([]);
+      // 상단 라벨 (흰 테두리 글자)
+      ctx.font = '700 14px ' + CHART_FONT; ctx.textAlign = 'center';
+      if (curve.label){
+        const tw = ctx.measureText(curve.label).width;
+        const lx = Math.min(Math.max(vlx, padL + tw/2 + 4), padL + plotW - tw/2 - 4);
+        haloText(ctx, curve.label, lx, padT + 16, curve.labelColor || C.refInk);
+      }
+      // 하단 화살표 라벨 (x→a 표시)
+      if (curve.bottomLabel){
+        const tw2 = ctx.measureText(curve.bottomLabel).width;
+        const lx2 = Math.min(Math.max(vlx, padL + tw2/2 + 4), padL + plotW - tw2/2 - 4);
+        haloText(ctx, curve.bottomLabel, lx2, padT+plotH - 7, curve.labelColor || C.refInk);
+        // 위를 향하는 삼각형 화살표
+        ctx.beginPath();
+        ctx.moveTo(vlx, padT+plotH - 25);
+        ctx.lineTo(vlx-6, padT+plotH - 33);
+        ctx.lineTo(vlx+6, padT+plotH - 33);
+        ctx.closePath();
+        ctx.fillStyle = vlineColor;
+        ctx.fill();
+      }
+      ctx.restore();
+      return;
+    }
+    if (!curve.fn) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(padL, padT, plotW, plotH);
+    ctx.clip();
+
+    ctx.strokeStyle = curve.color; ctx.lineWidth = curve.width || 3;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.globalAlpha = curve.alpha ?? 1;
+    if (curve.dash) ctx.setLineDash(curve.dash); else ctx.setLineDash([]);
+
+    const range = (yMax - yMin) || 1;
+    const bigThresh = range * 4;
+    const clampMargin = range * 2;
+    const baseSteps = curve.steps || 800;
+    const maxDepth = curve.adaptiveDepth ?? 7;
+    const jumpThreshold = range * 0.12;
+
+    function safeY(x){
+      try { const v = curve.fn(x); return (typeof v === 'number' && isFinite(v)) ? v : NaN; }
+      catch(e){ return NaN; }
+    }
+    function refine(p0, p1, depth){
+      if (depth <= 0 || !isFinite(p0.y) || !isFinite(p1.y) || Math.abs(p1.y - p0.y) <= jumpThreshold) {
+        return [p1];
+      }
+      const midX = (p0.x + p1.x) / 2;
+      const mid = { x: midX, y: safeY(midX) };
+      return [...refine(p0, mid, depth - 1), ...refine(mid, p1, depth - 1)];
+    }
+
+    const basePts = [];
+    for (let i=0;i<=baseSteps;i++){
+      const x = xMin + (i/baseSteps)*(xMax-xMin);
+      basePts.push({ x, y: safeY(x) });
+    }
+    let points = [basePts[0]];
+    for (let i=0;i<basePts.length-1;i++){
+      points.push(...refine(basePts[i], basePts[i+1], maxDepth));
+    }
+
+    ctx.beginPath();
+    let started = false;
+    let prevY = null, tagAt = null;
+    for (const p of points){
+      const y = p.y;
+      if (!isFinite(y)) { started = false; prevY = null; continue; }
+      if (curve.breakOnJump && prevY !== null) {
+        const wasBig = Math.abs(prevY) > bigThresh;
+        const isBig = Math.abs(y) > bigThresh;
+        const signFlip = (prevY > 0 && y < 0) || (prevY < 0 && y > 0);
+        if (wasBig && isBig && signFlip) { started = false; }
+      }
+      const clampedY = Math.max(yMin - clampMargin, Math.min(yMax + clampMargin, y));
+      const px = xPix(p.x), py = yPix(clampedY);
+      if (!started) { ctx.moveTo(px,py); started = true; } else { ctx.lineTo(px,py); }
+      prevY = y;
+      // [2단계] 이름표 자리: 그래프 안쪽의 가장 오른쪽 점
+      if (curve.tag && py > padT+22 && py < padT+plotH-34 && px < padL+plotW-6) tagAt = {px, py};
+    }
+    ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.restore();
+    if (curve.tag && tagAt) tagSpots.push({ text: curve.tag, color: curve.tagColor || curve.color, ...tagAt });
+  });
+
+  // [2단계] 색+글자: 곡선마다 이름표 (서로 겹치면 위아래로 비켜 놓음)
+  ctx.font = '700 14px ' + CHART_FONT; ctx.textAlign = 'right';
+  const placed = [];
+  tagSpots.forEach(s=>{
+    let y = s.py - 10;
+    for (let g=0; g<6 && placed.some(p=> Math.abs(p.y - y) < 17 && Math.abs(p.x - s.px) < 120); g++) y += (s.py > padT+plotH/2 ? -18 : 18);
+    y = Math.max(padT+30, Math.min(padT+plotH-30, y));
+    placed.push({x:s.px, y});
+    haloText(ctx, s.text, s.px - 4, y, s.color);
+  });
+
+  // [수정] 구멍(open) 마커는 극한 수렴점 마커보다 나중에 그림 — 기존엔 채워진 극한 마커가 구멍을 덮어
+  //        "○ = 구멍(정의 안 됨)"인 점이 채워진 점(정의됨)처럼 보였음
+  function drawMarkers(openOnes){
+    (curves||[]).forEach(curve=>{
+      if (curve.marker && !!curve.marker.open === openOnes){
+        const mx = xPix(curve.marker.x), my = yPix(curve.marker.y);
+        if (mx < padL-2 || mx > padL+plotW+2 || my < padT-2 || my > padT+plotH+2) return;
+        if (curve.marker.open){
+          ctx.fillStyle = tok('--pz-panel');
+          ctx.beginPath(); ctx.arc(mx, my, 6.5, 0, Math.PI*2); ctx.fill();
+          ctx.strokeStyle = curve.color; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.arc(mx, my, 6.5, 0, Math.PI*2); ctx.stroke();
+        } else {
+          ctx.fillStyle = curve.color;
+          ctx.beginPath(); ctx.arc(mx, my, 6, 0, Math.PI*2); ctx.fill();
+          ctx.strokeStyle = tok('--pz-panel'); ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(mx, my, 6, 0, Math.PI*2); ctx.stroke();
+        }
+      }
+    });
+  }
+  drawMarkers(false);
+
+  // 극한 수렴점 마커 (큰 원 + 라벨)
+  // dot.pos: 'right'(default) | 'top-left' | 'bottom-left'
+  (limitDots||[]).forEach(dot=>{
+    const mx = xPix(dot.x), my = yPix(dot.y);
+    if (mx < padL-2 || mx > padL+plotW+2 || my < padT-2 || my > padT+plotH+2) return;
+    ctx.save();
+    // 빛나는 외곽
+    ctx.shadowColor = dot.color;
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = dot.color;
+    ctx.beginPath(); ctx.arc(mx, my, 7, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+    // 흰 테두리
+    ctx.strokeStyle = tok('--pz-panel'); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(mx, my, 7, 0, Math.PI*2); ctx.stroke();
+    // 라벨 위치 계산 (14px 굵게 + 흰 테두리 글자)
+    if (dot.label){
+      ctx.font = '800 14px ' + CHART_FONT;
+      const tw = ctx.measureText(dot.label).width;
+      const R = 9; // 마커 반지름
+      const GAP = 5;
+      let lx, ly;
+      const pos = dot.pos || 'right';
+      if (pos === 'top-left') {
+        lx = mx - tw - GAP - R;
+        ly = my - R - GAP;
+        if (lx < padL + 2) lx = mx + R + GAP;
+      } else if (pos === 'bottom-left') {
+        lx = mx - tw - GAP - R;
+        ly = my + R + GAP + 13;
+        if (lx < padL + 2) lx = mx + R + GAP;
+      } else { // 'right'
+        lx = mx + R + GAP;
+        ly = my + 5;
+        if (lx + tw + 6 > padL + plotW - 2) lx = mx - tw - R - GAP;
+      }
+      ctx.textAlign = 'left';
+      haloText(ctx, dot.label, lx, ly, dot.ink || dot.color);
+    }
+    ctx.restore();
+  });
+  drawMarkers(true);
+}
+
+function attachPanZoom(canvasId, getView, setView, redraw){
+  const canvas = document.getElementById(canvasId);
+  const PAD = CHART_PAD; // [수정] drawLineChart 여백과 일치 — 확대 중심·드래그 거리 어긋남 방지 ([2단계] 같은 상수를 공유)
+  canvas.style.touchAction = 'none';
+  canvas.style.cursor = 'grab';
+
+  let dragging = false, lastPos = null, pinch = null;
+
+  // [2단계] 모든 좌표를 캔버스의 CSS px 단위로 계산한다. 글자 크기(CSS zoom)가 1이 아니면
+  // getBoundingClientRect·clientX는 화면 px, clientWidth는 CSS px → 화면 px ÷ k 로 바꿔 쓴다.
+  function plotSize(){
+    const w = canvas.clientWidth || 700, h = canvas.clientHeight || chartH;
+    return { w: Math.max(1, w - PAD.l - PAD.r), h: Math.max(1, h - PAD.t - PAD.b) };
+  }
+  function dataFromPixel(px, py){
+    const v = getView(); const { w, h } = plotSize();
+    return {
+      x: v.xMin + ((px - PAD.l) / w) * (v.xMax - v.xMin),
+      y: v.yMax - ((py - PAD.t) / h) * (v.yMax - v.yMin),
+    };
+  }
+  function pointerPos(e){
+    const rect = canvas.getBoundingClientRect();
+    const k = rect.width / Math.max(1, canvas.clientWidth);
+    const p = (e.touches && e.touches.length) ? e.touches[0] : e;
+    return { x: (p.clientX - rect.left) / k, y: (p.clientY - rect.top) / k };
+  }
+  function touchDist(t0, t1){ return Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY); }
+
+  function onDown(e){
+    if (!getView()) return;
+    if (e.touches && e.touches.length === 2){
+      pinch = { startDist: touchDist(e.touches[0], e.touches[1]), startView: { ...getView() } };
+      dragging = false;
+      e.preventDefault();
+      return;
+    }
+    dragging = true;
+    lastPos = pointerPos(e);
+    canvas.style.cursor = 'grabbing';
+  }
+  function onMove(e){
+    if (e.touches && e.touches.length === 2 && pinch){
+      const d = touchDist(e.touches[0], e.touches[1]);
+      const factor = pinch.startDist / Math.max(1, d);
+      const v0 = pinch.startView;
+      const cx = (v0.xMin + v0.xMax) / 2, cy = (v0.yMin + v0.yMax) / 2;
+      const halfX = (v0.xMax - v0.xMin) / 2 * factor, halfY = (v0.yMax - v0.yMin) / 2 * factor;
+      setView({ xMin: cx - halfX, xMax: cx + halfX, yMin: cy - halfY, yMax: cy + halfY });
+      redraw();
+      e.preventDefault();
+      return;
+    }
+    if (!dragging || !lastPos) return;
+    const pos = pointerPos(e);
+    const dxPix = pos.x - lastPos.x, dyPix = pos.y - lastPos.y;
+    const { w, h } = plotSize();
+    const v = getView();
+    // 자유 드래그: 가로·세로 동시 이동
+    const dx = -(dxPix / w) * (v.xMax - v.xMin);
+    const dy =  (dyPix / h) * (v.yMax - v.yMin);
+    setView({ xMin: v.xMin + dx, xMax: v.xMax + dx, yMin: v.yMin + dy, yMax: v.yMax + dy });
+    lastPos = pos;
+    redraw();
+    e.preventDefault();
+  }
+  function onUp(){
+    dragging = false; pinch = null; lastPos = null;
+    canvas.style.cursor = 'grab';
+  }
+  function onWheel(e){
+    if (!getView()) return;
+    e.preventDefault();
+    const pos = pointerPos(e);
+    const before = dataFromPixel(pos.x, pos.y);
+    const factor = e.deltaY > 0 ? 1.12 : 0.89;
+    const v = getView();
+    setView({
+      xMin: before.x - (before.x - v.xMin) * factor,
+      xMax: before.x + (v.xMax - before.x) * factor,
+      yMin: before.y - (before.y - v.yMin) * factor,
+      yMax: before.y + (v.yMax - before.y) * factor,
+    });
+    redraw();
+  }
+
+  canvas.addEventListener('mousedown', onDown);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+  canvas.addEventListener('touchstart', onDown, { passive:false });
+  canvas.addEventListener('touchmove', onMove, { passive:false });
+  canvas.addEventListener('touchend', onUp);
+  canvas.addEventListener('wheel', onWheel, { passive:false });
+}
+
+/* ==================== 탭 전환 ==================== */
+function redrawTab(n){
+  fitChart(n);
+  if (n===1) refreshVerify();
+  if (n===2) { if (caseAnswers[caseIdx] !== null) redrawEvidence(); }
+  if (n===3) redrawSurgery();
+}
+function showTab(n) {
+  currentTab = n;
+  [1,2,3].forEach(i => {
+    document.getElementById('tab'+i).style.display = (i===n) ? '' : 'none';
+    const b = document.getElementById('tabBtn'+i);
+    b.classList.toggle('active', i===n);
+    b.setAttribute('aria-selected', String(i===n));
+  });
+  // [2단계] 새 패널을 부드럽게 나타나게
+  if (window.PastelUI) PastelUI.fade(document.getElementById('tab'+n));
+  fitChart(n);
+  if (n===1) refreshVerify();
+  if (n===2) renderCase();
+  if (n===3) redrawSurgery();
+  requestAnimationFrame(()=> redrawTab(n)); // [2단계] 레이아웃 확정 후 그래프 높이 맞춰 다시 그림
+}
+
+/* ==================== 수치적 극한 계산 ==================== */
+// 반환: {type:'num', v} | {type:'inf', s:+1/-1} | {type:'none'}
+function numLimit(fn, a){
+  const hs = [1e-3, 1e-4, 1e-5, 1e-6];
+  function side(sign){
+    const vals = [];
+    for (const h of hs){
+      let v;
+      try { v = fn(a + sign*h); } catch(e){ v = NaN; }
+      if (typeof v !== 'number' || isNaN(v)) return { type:'none' };
+      vals.push(v);
+    }
+    const last = vals[vals.length-1], prev = vals[vals.length-2], prev2 = vals[vals.length-3];
+    if (Math.abs(last) > 1e5 && Math.abs(last) > Math.abs(prev)*3) {
+      return { type:'inf', s: last > 0 ? 1 : -1 };
+    }
+    // [수정] 기울기가 큰 함수(예: (4x+2)/x², x→-0.5 → 극한 0)는 h를 1/10로 줄일 때 차이도 약 1/10로 줄어듦.
+    //        기존 절대 허용오차(1e-4)만으로는 이런 수렴을 '존재 X'로 오판 → 차이의 감소 비율로도 수렴 판정
+    const d1 = Math.abs(last - prev), d0 = Math.abs(prev - prev2);
+    if (d1 < Math.max(1e-4, Math.abs(last)*1e-3) || (d1 < 0.3*d0 && d1 < 1)) {
+      return { type:'num', v: last };
+    }
+    return { type:'none' };
+  }
+  const R = side(1), L = side(-1);
+  if (R.type==='num' && L.type==='num' && Math.abs(R.v - L.v) < Math.max(1e-3, Math.abs(R.v)*1e-2)) {
+    let v = (R.v + L.v)/2;
+    // [수정] 정수 맞춤 허용오차 1e-3 → 1e-6 (5.9995를 6으로, -0.001을 0으로 바꿔 ②와 어긋나던 문제)
+    if (Math.abs(v - Math.round(v)) < 1e-6) v = Math.round(v);
+    return { type:'num', v };
+  }
+  if (R.type==='inf' && L.type==='inf' && R.s === L.s) return { type:'inf', s:R.s };
+  return { type:'none' };
+}
+// [수정] 소수 셋째 자리 반올림 전에 1e-9 단위로 먼저 정리 → ①(수치극한)과 ②(성질 계산)가 22.287 / 22.286 처럼 끝자리만 어긋나지 않게
+function r3(v){ const r = Math.abs(v) < 1e6 ? Math.round(Math.round(v*1e9)/1e6)/1000 : Math.round(v*1000)/1000; return Object.is(r,-0) ? 0 : r; }
+function fmtLimit(r){
+  if (!r) return '—';
+  if (r.type==='num') {
+    const v = r3(r.v);
+    return (Object.is(v,-0)?0:v).toString();
+  }
+  if (r.type==='inf') return r.s>0 ? '∞ (발산)' : '-∞ (발산)';
+  return '존재 X';
+}
+
+/* ==================== TAB 1 : 검증실 ==================== */
+let limitA = 1; // 극한을 보는 점 x -> a (사용자 조절)
+let vf = { a: 1, b: 1 };
+const VERIFY_INIT = { limitA, a: vf.a, b: vf.b };   // [UX] 처음 값으로
+const gDefs = [
+  { key:'g1', label:'x²',            fn: x => x*x,                            desc:'수렴 (lim = 1)' },
+  { key:'g2', label:'(x²-1)/(x-1)',  fn: x => (x*x-1)/(x-1),                  desc:'구멍 있지만 수렴 (lim = 2)', hole:{x:1,y:2} },
+  { key:'g3', label:'1/(x-1)²',      fn: x => 1/((x-1)*(x-1)),                desc:'양의 무한대 발산' },
+  { key:'g4', label:'1/(x-1)',       fn: x => 1/(x-1),                        desc:'좌우가 달라 존재 X' },
+  { key:'custom', label:'✏️ 직접 입력', fn: x => customGFn(x),                 desc:'나만의 g(x)' },
+];
+let customGCompiled = null;
+let gTokens = '';
+function customGFn(x){
+  if (!customGCompiled) return NaN;
+  try { const y = customGCompiled.evaluate({x}); return (typeof y === 'number') ? y : NaN; }
+  catch(e){ return NaN; }
+}
+function renderGExpr(){
+  document.getElementById('gExprDisplay').innerHTML = 'g(x)&nbsp;=&nbsp;' + (gTokens || '');
+}
+function appendGToken(t){ gTokens += t; renderGExpr(); }
+function backspaceG(){ gTokens = gTokens.slice(0, -1); renderGExpr(); }
+function clearG(){
+  gTokens = ''; renderGExpr();
+  document.getElementById('customGErr').textContent = '';
+}
+function applyCustomG(){
+  const err = document.getElementById('customGErr');
+  const s = gTokens.trim();
+  if (!s){ err.textContent = '식을 입력해주세요.'; err.style.color = 'var(--warnred)'; return; }
+  if (typeof math === 'undefined'){ err.textContent = '수식 라이브러리를 불러오지 못했어요. 인터넷 연결을 확인해주세요.'; err.style.color = 'var(--warnred)'; return; }
+  try {
+    const compiled = math.compile(s);
+    compiled.evaluate({x: 0.5}); // 문법 검증
+    customGCompiled = compiled;
+    err.textContent = '✓ 적용되었습니다! 그래프와 극한값을 확인해보세요.'; err.style.color = 'var(--okgreen)';
+    refreshVerify();
+  } catch(e){
+    err.textContent = '식을 해석할 수 없어요. 괄호와 연산자를 확인해주세요.'; err.style.color = 'var(--warnred)';
+  }
+}
+let gIdx = 0;
+/* [수식] 연산별 식: 곱은 기호를 생략하거나 가운데 점(·), 몫은 분수 */
+function opTex(key, L){
+  if (key === '*') return { act: `\\{f(x)g(x)\\}`, prop: `${L} f(x)\\cdot ${L} g(x)`, name: 'f·g' };
+  if (key === '/') return { act: `\\dfrac{f(x)}{g(x)}`, prop: `\\dfrac{${L} f(x)}{${L} g(x)}`, name: 'f/g' };
+  const o = key === '-' ? '-' : '+';
+  return { act: `\\{f(x)${o}g(x)\\}`, prop: `${L} f(x)${o}${L} g(x)`, name: key === '-' ? 'f−g' : 'f+g' };
+}
+const opDefs = [
+  { key:'+', label:'＋', apply:(p,q)=>p+q },
+  { key:'-', label:'－', apply:(p,q)=>p-q },
+  { key:'*', label:'×', apply:(p,q)=>p*q },
+  { key:'/', label:'÷', apply:(p,q)=>p/q },
+];
+let opIdx = 0;
+
+let verifyView = { xMin:-2.5, xMax:4.5, yMin:-3.5, yMax:3.5 };
+const VERIFY_DEFAULT = { xMin:-2.5, xMax:4.5, yMin:-3.5, yMax:3.5 };
+/* [UX] 처음 값으로: 목표 지점 a와 f의 계수 m·n만 처음 값으로 (고른 g·연산·보기는 그대로) */
+function resetVerifyValues(){
+  limitA = VERIFY_INIT.limitA; vf.a = VERIFY_INIT.a; vf.b = VERIFY_INIT.b;
+  [['sliderTA','numTA',limitA],['sliderFA','numFA',vf.a],['sliderFB','numFB',vf.b]].forEach(([s,n,v])=>{ document.getElementById(s).value = v; document.getElementById(n).value = v; });
+  refreshVerify();
+}
+function resetVerifyView(){ verifyView = { ...VERIFY_DEFAULT }; refreshVerify(); }
+
+function fFn(x){ return vf.a*x + vf.b; }
+function gFn(x){ return gDefs[gIdx].fn(x); }
+function comboFn(x){ return opDefs[opIdx].apply(fFn(x), gFn(x)); }
+
+function buildChips(){
+  const gWrap = document.getElementById('gChips');
+  gWrap.innerHTML = '';
+  gDefs.forEach((g,i)=>{
+    const b = document.createElement('button');
+    b.className = 'chip gchip' + (i===gIdx?' active':'');
+    b.textContent = g.label;
+    b.onclick = ()=>{ gIdx = i; buildChips(); document.getElementById('customGBox').style.display = (gDefs[i].key==='custom') ? '' : 'none'; refreshVerify(); };
+    gWrap.appendChild(b);
+  });
+  const oWrap = document.getElementById('opChips');
+  oWrap.innerHTML = '';
+  opDefs.forEach((o,i)=>{
+    const b = document.createElement('button');
+    b.className = 'chip opChip' + (i===opIdx?' active':'');
+    b.textContent = o.label;
+    b.onclick = ()=>{ opIdx = i; buildChips(); refreshVerify(); };
+    oWrap.appendChild(b);
+  });
+}
+
+function refreshVerify(){
+  const canvas = document.getElementById('verifyChart');
+  const aStr = (Math.round(limitA*10)/10).toString();
+
+  // x=a 에서의 함숫값 (정의되어 있으면 점으로 표시)
+  function valAt(fn){
+    try { const v = fn(limitA); return (typeof v==='number' && isFinite(v) && Math.abs(v) < 1e6) ? v : null; }
+    catch(e){ return null; }
+  }
+  const fVal = valAt(fFn), gVal = valAt(gFn);
+
+  const curves = [
+    { vline: limitA, color: C.ref, vlineWidth:2, label: 'x='+aStr, bottomLabel: 'x→'+aStr, labelColor: C.refInk },
+    // [2단계] f = 하늘 점선, g = 라벤더 점선, f∘g = 버터 실선 + 선마다 이름표
+    { fn: fFn, color: C.f, width: 3, dash:[7,5], alpha:0.9, tag:'f(x)', tagColor: C.fInk },
+    { fn: gFn, color: C.g, width: 3, dash:[7,5], alpha:0.9, breakOnJump:true, steps:1200, tag:'g(x)', tagColor: C.gInk },
+    { fn: comboFn, color: C.r, width: 3.5, breakOnJump:true, steps:1200, tag:'f ' + ({'+':'+','-':'−','*':'×','/':'÷'})[opDefs[opIdx].key] + ' g', tagColor: C.rInk },
+  ];
+  if (fVal !== null) curves.push({ color: C.f, marker:{ x:limitA, y:fVal } });
+  if (gVal !== null) curves.push({ color: C.g, marker:{ x:limitA, y:gVal } });
+
+  // 극한값 먼저 계산 (limitDots 마커에서도 사용)
+  const rf = numLimit(fFn, limitA);
+  const rg = numLimit(gFn, limitA);
+  const ra = numLimit(comboFn, limitA);
+  // [수정] x=a에서 정의되지 않지만 극한이 존재하면 구멍(○) 표시 (예: g=(x²-1)/(x-1), a=1)
+  if (gVal === null && rg.type === 'num') curves.push({ color: C.g, marker:{ x:limitA, y:rg.v, open:true } });
+  if ((gVal === null || valAt(comboFn) === null) && ra.type === 'num') curves.push({ color: C.r, marker:{ x:limitA, y:ra.v, open:true } });
+
+  // 탭1: f, g, f∘g 극한값 좌표 마커
+  const limitDots = [];
+  if (ra.type === 'num') {
+    const lyVal = r3(ra.v);
+    limitDots.push({ x: limitA, y: ra.v, color: C.r, ink: C.rInk, label: `lim(${opTex(opDefs[opIdx].key, '').name})=${lyVal}`, pos: 'right' });
+  }
+  if (rf.type === 'num') {
+    limitDots.push({ x: limitA, y: rf.v, color: C.f, ink: C.fInk, label: `lim f=${Math.round(rf.v*100)/100}`, pos: 'top-left' });
+  }
+  if (rg.type === 'num') {
+    limitDots.push({ x: limitA, y: rg.v, color: C.g, ink: C.gInk, label: `lim g=${Math.round(rg.v*100)/100}`, pos: 'bottom-left' });
+  }
+  drawLineChart(canvas, verifyView.xMin, verifyView.xMax, verifyView.yMin, verifyView.yMax, curves, null, null, limitDots);
+
+  // 함숫값 안내
+  const fvEl = document.getElementById('funcValNote');
+  const parts = [];
+  parts.push(fVal !== null ? `f(${aStr}) = ${Math.round(fVal*100)/100}` : `f(${aStr}) 정의 안 됨`);
+  parts.push(gVal !== null ? `g(${aStr}) = ${Math.round(gVal*100)/100}` : `g(${aStr}) 정의 안 됨 (그래도 극한은 존재할 수 있어요!)`);
+  fvEl.textContent = '📍 x=' + aStr + ' 에서의 함숫값: ' + parts.join('  ·  ');
+
+  const LIM = `\\lim\\limits_{x\\to ${aStr}}`;
+  document.getElementById('limFLabel').innerHTML = texHTML(`\\(${LIM} f(x)\\)`);
+  document.getElementById('limGLabel').innerHTML = texHTML(`\\(${LIM} g(x)\\)`);
+  const OP = opTex(opDefs[opIdx].key, LIM), OPa = opTex(opDefs[opIdx].key, '\\lim\\limits_{x\\to a}');
+  document.getElementById('limRLabel').innerHTML = texHTML(`① 실제: \\(${LIM}${OP.act}\\)`);
+  document.getElementById('limPLabel').innerHTML = texHTML(`② 성질로: \\(${OP.prop}\\)`);
+  document.getElementById('verifyTitle').innerHTML = texHTML(`🔬 성질 검증실 — \\(\\lim\\limits_{x\\to a}${OPa.act}\\) 와 \\(${OPa.prop}\\) 는 항상 같을까?`);
+  document.getElementById('legendR').textContent = OP.name;
+  document.getElementById('limF').textContent = fmtLimit(rf);
+  document.getElementById('limG').textContent = fmtLimit(rg);
+  document.getElementById('limActual').textContent = fmtLimit(ra);
+
+  const propEl = document.getElementById('limByProp');
+  const verdict = document.getElementById('verifyVerdict');
+  // [수정] '직접 입력'을 골랐지만 아직 식을 적용하지 않았으면 판정 대신 안내 (기존: '성질 적용 불가… 실제 극한도 존재하지 않네요'로 오판정)
+  if (gDefs[gIdx].key === 'custom' && !customGCompiled){
+    propEl.textContent = '—';
+    verdict.className = 'verdictBox warn';
+    verdict.textContent = '✏️ 아래 키패드로 g(x) 식을 만들고 「이 식을 g(x)로 적용하기」를 눌러주세요.';
+    return;
+  }
+
+  if (rf.type==='num' && rg.type==='num'){
+    if (opDefs[opIdx].key==='/' && Math.abs(rg.v) < 1e-9){
+      propEl.textContent = '계산 불가 (÷0)';
+      verdict.className = 'verdictBox warn';
+      verdict.innerHTML = texHTML(`⚠️ \\(${LIM} g(x)=0\\) 이라서 몫의 성질을 쓸 수 없어요. 그런데 ①의 실제 극한은? — 성질이 안 통할 때도 극한 자체는 존재할 수 있습니다 (0/0 꼴 → 수술실로!)`);
+      return;
+    }
+    const pv = opDefs[opIdx].apply(rf.v, rg.v);
+    propEl.textContent = r3(pv).toString();
+    const match = (ra.type==='num') && Math.abs(ra.v - pv) < Math.max(1e-2, Math.abs(pv)*1e-2);
+    verdict.className = 'verdictBox ' + (match ? 'ok' : 'bad');
+    verdict.textContent = match
+      ? '✅ 성질 성립! 두 극한값이 모두 존재하니 ① = ② 가 됩니다. 이게 바로 극한의 성질(상수배·합·차·곱·몫의 성질)입니다.'
+      : '🤔 어라, 값이 다르네요? 수치 오차일 수 있으니 다시 확인해보세요.';
+  } else {
+    propEl.textContent = '계산 불가';
+    verdict.className = 'verdictBox bad';
+    const still = (ra.type==='num') ? ` 그런데 ①의 실제 극한은 ${fmtLimit(ra)} 로 멀쩡히 존재하네요! \\(${OP.prop}\\) 로 쪼개서 계산할 수 없을 뿐, 극한 자체가 없는 건 아닙니다.` : ' 실제 극한도 존재하지 않네요.';
+    verdict.innerHTML = texHTML(`🚫 성질 적용 불가! 극한의 성질은 \\(${LIM} f(x)\\) 와 \\(${LIM} g(x)\\) 가 모두 존재(수렴)할 때만 쓸 수 있어요.` + still);
+  }
+}
+
+function bindPair(sliderId, numId, key, min, max){
+  const slider = document.getElementById(sliderId), num = document.getElementById(numId);
+  slider.addEventListener('input', ()=>{ vf[key] = Number(slider.value); num.value = slider.value; refreshVerify(); });
+  num.addEventListener('input', ()=>{
+    if (num.value.trim() === '') return; // [수정] 칸을 지우는 순간 값이 0으로 튀지 않게
+    let v = Number(num.value);
+    if (isNaN(v)) return;
+    v = Math.max(min, Math.min(max, v));
+    vf[key] = v; slider.value = v; refreshVerify();
+  });
+  num.addEventListener('change', ()=>{ num.value = vf[key]; }); // [수정] 범위 밖 입력은 실제 적용값으로 표시
+}
+
+/* ==================== TAB 2 : 법정 ==================== */
+const cases = [
+  {
+    statement: '두 극한 \\(\\lim\\limits_{x\\to a} f(x)\\) 와 \\(\\lim\\limits_{x\\to a} g(x)\\) 가 모두 존재하면 \\[\\lim_{x\\to a}\\{f(x)+g(x)\\}=\\lim_{x\\to a} f(x)+\\lim_{x\\to a} g(x)\\] 이다.',
+    guilty: false,
+    explain: '극한의 성질 중 합의 성질 그 자체입니다. 두 극한이 <b>모두 존재한다</b>는 조건이 붙어 있으므로 항상 참 — 무죄! 증거: f(x)=x²-2x 와 g(x)=x 에서 x→1일 때, 각각 -1과 1로 <span class="pz-term" data-tip="수렴">수렴</span>하고 합의 극한도 정확히 0입니다.',
+    curves: (v)=>[
+      { vline:1, color: C.ref },
+      { fn:x=>x*x-2*x, color: C.f, width:3, dash:[7,5] },
+      { fn:x=>x, color: C.g, width:3, dash:[7,5] },
+      { fn:x=>x*x-x, color: C.r, width:3.5, marker:{x:1,y:0} },
+    ],
+    legend: [['var(--fcolor)','f = x²-2x'],['var(--gcolor)','g = x'],['var(--rcolor)','f+g = x²-x']],
+    rname: 'f+g',   // [2단계] 증거 그래프 라벨 lim(f+g) (기존 'lim(결과)')
+    hint: 'x=1 에서 -1 + 1 = 0. 합의 그래프도 정확히 0을 지나갑니다.',
+    view: { xMin:-2, xMax:4, yMin:-3, yMax:4 },
+  },
+  {
+    statement: '\\(\\lim\\limits_{x\\to a}\\{f(x)g(x)\\}\\) 가 존재하면, \\(\\lim\\limits_{x\\to a} f(x)\\) 와 \\(\\lim\\limits_{x\\to a} g(x)\\) 도 각각 존재한다.',
+    guilty: true,
+    explain: '반례가 있으므로 유죄! <span class="mono">f(x)=1/x, g(x)=x</span> 로 두면 x→0일 때 <span class="mono">f·g = 1</span> 이라 곱의 극한은 1로 존재하지만, \\(\\lim\\limits_{x\\to 0} f(x)\\) 는 존재하지 않습니다. 곱의 성질의 <b>역방향은 성립하지 않아요.</b>',
+    curves: (v)=>[
+      { vline:0, color: C.ref },
+      { fn:x=>1/x, color: C.f, width:3, dash:[7,5], breakOnJump:true, steps:1200 },
+      { fn:x=>x, color: C.g, width:3, dash:[7,5] },
+      { fn:x=>x===0?NaN:1, color: C.r, width:3.5, marker:{x:0,y:1,open:true} },
+    ],
+    legend: [['var(--fcolor)','f = 1/x (발산)'],['var(--gcolor)','g = x'],['var(--rcolor)','f·g = 1 (수렴!)']],
+    rname: 'f·g',   // [2단계] 증거 그래프 라벨 lim(f·g) (기존 'lim(결과)')
+    hint: 'f는 x=0에서 폭주하는데, g가 곱해지며 완벽하게 진정됩니다. 곱은 상수 1 (x=0 구멍만 남음).',
+    view: { xMin:-3, xMax:3, yMin:-4, yMax:4 },
+  },
+  {
+    statement: '\\(\\lim\\limits_{x\\to a}\\dfrac{f(x)}{g(x)}\\) 가 존재하고 \\(\\lim\\limits_{x\\to a} g(x)=0\\) 이면, \\(\\lim\\limits_{x\\to a} f(x)=0\\) 이다.',
+    guilty: false,
+    explain: '무죄(항상 참)! <span class="mono">f = (f/g)·g</span> 로 쓰면 곱의 성질에 의해 \\[\\lim_{x\\to a} f(x)=\\lim_{x\\to a}\\frac{f(x)}{g(x)}\\cdot\\lim_{x\\to a} g(x)=(\\text{극한값})\\cdot 0=0\\] 0/0 꼴 문제에서 미정계수를 결정할 때 쓰는 바로 그 원리입니다. 증거: f=x²-1, g=x-1 이면 x→1에서 f/g→2 이고 실제로 \\(\\lim\\limits_{x\\to 1} f(x)=0\\).',
+    curves: (v)=>[
+      { vline:1, color: C.ref },
+      { fn:x=>x*x-1, color: C.f, width:3, marker:{x:1,y:0} },
+      { fn:x=>x-1, color: C.g, width:3, dash:[7,5], marker:{x:1,y:0} },
+      { fn:x=>(x*x-1)/(x-1), color: C.r, width:3.5, marker:{x:1,y:2,open:true} },
+    ],
+    legend: [['var(--fcolor)','f = x²-1 → 0'],['var(--gcolor)','g = x-1 → 0'],['var(--rcolor)','f/g → 2']],
+    rname: 'f/g',   // [2단계] 증거 그래프 라벨 lim(f/g) (기존 'lim(결과)')
+    hint: '분모가 0으로 가는데 몫이 수렴하려면, 분자도 반드시 0으로 가야만 합니다.',
+    view: { xMin:-2, xMax:4, yMin:-3, yMax:4 },
+  },
+  {
+    statement: '\\(\\lim\\limits_{x\\to a}\\dfrac{f(x)}{g(x)}\\) 가 존재하고 \\(\\lim\\limits_{x\\to a} f(x)=0\\) 이면, \\(\\lim\\limits_{x\\to a} g(x)=0\\) 이다.',
+    guilty: true,
+    explain: '앞 사건을 뒤집었더니 거짓 — 유죄! 반례: <span class="mono">f(x)=x-1, g(x)=x+1</span> 이면 x→1일 때 <span class="mono">f/g → 0/2 = 0</span> 으로 존재하고 \\(\\lim\\limits_{x\\to 1} f(x)=0\\) 이지만, \\(\\lim\\limits_{x\\to 1} g(x)=2\\neq 0\\) 입니다. 분모는 0이 아니어도 몫이 잘만 <span class="pz-term" data-tip="수렴">수렴</span>하죠.',
+    curves: (v)=>[
+      { vline:1, color: C.ref },
+      { fn:x=>x-1, color: C.f, width:3, dash:[7,5], marker:{x:1,y:0} },
+      { fn:x=>x+1, color: C.g, width:3, dash:[7,5], marker:{x:1,y:2} },
+      { fn:x=>(x-1)/(x+1), color: C.r, width:3.5, marker:{x:1,y:0}, breakOnJump:true },
+    ],
+    legend: [['var(--fcolor)','f = x-1 → 0'],['var(--gcolor)','g = x+1 → 2'],['var(--rcolor)','f/g → 0']],
+    rname: 'f/g',   // [2단계] 증거 그래프 라벨 lim(f/g) (기존 'lim(결과)')
+    hint: '몫이 0으로 수렴하지만 분모의 극한은 2. "분자가 0 → 분모도 0" 은 성립하지 않습니다.',
+    view: { xMin:-3, xMax:4, yMin:-3, yMax:4 },
+  },
+  {
+    statement: 'x=a 근처의 <b>x≠a</b>인 모든 x에서 <span class="mono">f(x) &lt; g(x)</span> (부등호가 진짜로 작다!) 이면, \\(\\lim\\limits_{x\\to a} f(x)<\\lim\\limits_{x\\to a} g(x)\\) 이다.',
+    guilty: true,
+    explain: '유죄! 함숫값이 항상 작아도 극한은 <b>같아질 수 있습니다.</b> 반례: <span class="mono">f(x)=-x², g(x)=x²</span> 은 x≠0인 모든 x에서 f&lt;g 이지만, x→0일 때 두 극한 모두 0으로 같습니다. 그래서 대소 관계 성질은 &lt;가 아니라 <b>≤ 로만</b> 결론을 내립니다.',
+    curves: (v)=>[
+      { vline:0, color: C.ref },
+      { fn:x=>-x*x, color: C.f, width:3, marker:{x:0,y:0} },
+      { fn:x=>x*x, color: C.g, width:3 },
+    ],
+    legend: [['var(--fcolor)','f = -x²'],['var(--gcolor)','g = x²']],
+    hint: '두 곡선은 절대 겹치지 않지만(x≠0), 극한은 원점 한 점에서 만납니다.',
+    view: { xMin:-3, xMax:3, yMin:-4, yMax:4 },
+  },
+  {
+    statement: '\\(\\lim\\limits_{x\\to a}\\{f(x)+g(x)\\}\\) 가 존재하면, \\(\\lim\\limits_{x\\to a} f(x)\\) 와 \\(\\lim\\limits_{x\\to a} g(x)\\) 도 각각 존재한다.',
+    guilty: true,
+    explain: '유죄! 반례: <span class="mono">f(x)=1/x, g(x)=-1/x</span> 로 두면 x→0에서 각각은 존재하지 않지만, 합은 항상 0이라 \\(\\lim\\limits_{x\\to 0}\\{f(x)+g(x)\\}=0\\) 으로 존재합니다. 두 폭주가 정확히 상쇄된 거죠. 합의 성질도 역방향은 성립하지 않습니다.',
+    curves: (v)=>[
+      { vline:0, color: C.ref },
+      { fn:x=>1/x, color: C.f, width:3, dash:[7,5], breakOnJump:true, steps:1200 },
+      { fn:x=>-1/x, color: C.g, width:3, dash:[7,5], breakOnJump:true, steps:1200 },
+      { fn:x=>x===0?NaN:0, color: C.r, width:3.5, marker:{x:0,y:0,open:true} },
+    ],
+    legend: [['var(--fcolor)','f = 1/x'],['var(--gcolor)','g = -1/x'],['var(--rcolor)','f+g = 0']],
+    rname: 'f+g',   // [2단계] 증거 그래프 라벨 lim(f+g) (기존 'lim(결과)')
+    hint: '서로 반대로 폭주하는 두 함수의 합이 완벽한 0. 이런 상쇄가 "역은 성립 안 함"의 핵심입니다.',
+    view: { xMin:-3, xMax:3, yMin:-4, yMax:4 },
+  },
+];
+let caseIdx = 0;
+let caseAnswers = new Array(cases.length).fill(null); // {picked, correct}
+let evView = null;
+
+function renderCase(){
+  const c = cases[caseIdx];
+  document.getElementById('caseNum').textContent = `CASE ${caseIdx+1} / ${cases.length}`;
+  document.getElementById('caseStatement').innerHTML = texHTML(c.statement);
+  const answered = caseAnswers[caseIdx] !== null;
+  const bG = document.getElementById('btnGuilty'), bI = document.getElementById('btnInnocent');
+  bG.disabled = answered; bI.disabled = answered;
+  bG.classList.toggle('picked', answered && caseAnswers[caseIdx].picked === true);
+  bI.classList.toggle('picked', answered && caseAnswers[caseIdx].picked === false);
+  document.getElementById('revealBox').style.display = answered ? 'block' : 'none';
+  // [2단계] 오른쪽 증거 그래프 카드: 판결 전에는 안내 문구, 판결 후 그래프
+  document.getElementById('evidenceCard').classList.toggle('isOpen', answered);
+  document.getElementById('rejudgeBtn').style.display = answered ? '' : 'none';
+  updateScore();
+  if (answered) showReveal();
+}
+function rejudge(){
+  caseAnswers[caseIdx] = null;
+  renderCase();
+}
+function updateScore(){
+  const done = caseAnswers.filter(a=>a!==null).length;
+  const right = caseAnswers.filter(a=>a && a.correct).length;
+  document.getElementById('scoreBadge').textContent = `판결 ${done} / ${cases.length} · 정답 ${right}`;
+}
+function judge(pickedGuilty){
+  if (caseAnswers[caseIdx] !== null) return;
+  const c = cases[caseIdx];
+  caseAnswers[caseIdx] = { picked: pickedGuilty, correct: pickedGuilty === c.guilty };
+  renderCase();
+  // [2단계] 축하: 6개 사건을 모두 처음 판결한 순간 한 번
+  if (caseAnswers.every(a => a !== null) && window.PastelUI) PastelUI.celebrate('1-2-법정', '🎉 6개 사건 판결 완료!');
+}
+function showReveal(){
+  const c = cases[caseIdx];
+  const ans = caseAnswers[caseIdx];
+  const t = document.getElementById('revealTitle');
+  const verdictWord = c.guilty ? '유죄 (거짓 — 반례 존재)' : '무죄 (항상 참)';
+  if (ans.correct){
+    t.className = 'revealTitle correct';
+    t.textContent = `🎉 정답! 판결: ${verdictWord}`;
+  } else {
+    t.className = 'revealTitle wrong';
+    t.textContent = `😅 오판! 진짜 판결: ${verdictWord}`;
+  }
+  document.getElementById('revealExplain').innerHTML = texHTML(c.explain);
+  const legend = document.getElementById('evidenceLegend');
+  legend.innerHTML = c.legend.map(([col,lab])=>`<span><span class="dot" style="background:${col}"></span>${lab}</span>`).join('');
+  document.getElementById('evidenceHint').textContent = '🔍 ' + c.hint + ' (드래그·확대 가능)';
+  evView = { ...c.view };
+  fitChart(2);   // [2단계] 증거 카드가 막 나타났을 때 그래프 높이를 화면에 맞춤
+  redrawEvidence();
+}
+function redrawEvidence(){
+  if (!evView) return;
+  const c = cases[caseIdx];
+  const allCurves = c.curves(evView);
+  // [2단계] 곡선 이름표 (색+글자)
+  allCurves.forEach(curve => {
+    if (!curve.fn) return;
+    if (curve.color === C.f) { curve.tag = 'f'; curve.tagColor = C.fInk; }
+    else if (curve.color === C.g) { curve.tag = 'g'; curve.tagColor = C.gInk; }
+    else if (curve.color === C.r) { curve.tag = c.rname || ''; curve.tagColor = C.rInk; }
+  });
+  // x=a 수직선에 bottomLabel 추가 (없으면 자동 보완)
+  allCurves.forEach(curve => {
+    if (curve.vline !== undefined && !curve.bottomLabel) {
+      const vStr = (Math.round(curve.vline*10)/10).toString();
+      curve.bottomLabel = 'x→' + vStr;
+      curve.labelColor = C.refInk;
+      curve.color = C.ref;
+      curve.vlineWidth = 2;
+      if (!curve.label) curve.label = 'x=' + vStr;
+    }
+  });
+  // 탭2: f, g, 결과 함수 각각의 극한값을 numLimit으로 수치 계산하여 마커 표시
+  const limitDots2 = [];
+  if (c.limitDots) {
+    c.limitDots.forEach(d => limitDots2.push(d));
+  } else {
+    // vline(x=a)을 먼저 찾기
+    let vlineA = null;
+    allCurves.forEach(curve => { if (curve.vline !== undefined) vlineA = curve.vline; });
+
+    if (vlineA !== null) {
+      allCurves.forEach(curve => {
+        if (!curve.fn) return;
+        const lim = numLimit(curve.fn, vlineA);
+        if (lim.type !== 'num') return;
+        const lyv = r3(lim.v);
+        let label = '', pos = 'right';
+        let ink = curve.color;
+        if (curve.color === C.f)      { label = `lim f=${lyv}`;      pos = 'top-left'; ink = C.fInk; }
+        else if (curve.color === C.g) { label = `lim g=${lyv}`;      pos = 'bottom-left'; ink = C.gInk; }
+        else if (curve.color === C.r) { label = `lim(${c.rname || '결과'})=${lyv}`;  pos = 'right'; ink = C.rInk; }
+        else                          { label = `lim=${lyv}`;         pos = 'right'; }
+        limitDots2.push({ x: vlineA, y: lim.v, color: curve.color, ink, label, pos });
+      });
+    }
+  }
+  drawLineChart(document.getElementById('evidenceChart'),
+    evView.xMin, evView.xMax, evView.yMin, evView.yMax, allCurves, null, null, limitDots2);
+}
+function prevCase(){ caseIdx = (caseIdx - 1 + cases.length) % cases.length; renderCase(); }
+function nextCase(){ caseIdx = (caseIdx + 1) % cases.length; renderCase(); }
+
+/* ==================== TAB 3 : 수술실 ==================== */
+const patients = [
+  {
+    name: '환자 A',
+    a: 1, limit: 2,
+    fn: x => (x*x-1)/(x-1),
+    hole: { x:1, y:2 },
+    correctTools: ['factor','cancel','subst'],
+    steps: [
+      `\\(\\displaystyle\\lim_{x\\to 1}\\frac{x^2-1}{x-1}\\)`,
+      `\\(\\displaystyle\\lim_{x\\to 1}\\frac{(x-1)(x+1)}{x-1}\\)`,
+      `\\(\\displaystyle\\lim_{x\\to 1}\\frac{\\cancel{(x-1)}(x+1)}{\\cancel{x-1}}=\\lim_{x\\to 1}(x+1)\\)`,
+      `\\(\\displaystyle\\lim_{x\\to 1}(x+1)=\\) <span class="answer">2</span>`,
+    ],
+    stepMsgs: ['', '🔪 인수분해 성공! 분자에 (x−1)이 숨어 있었네요.', '✂️ x≠1 이니까 (x−1)을 마음껏 약분! 이제 그냥 x+1 입니다.', '💉 이제 대입해도 안전합니다. 극한값 2, 수술 성공!'],
+  },
+  {
+    name: '환자 B',
+    a: 0, limit: 0.25,
+    fn: x => (Math.sqrt(x+4)-2)/x,
+    hole: { x:0, y:0.25 },
+    correctTools: ['rational','cancel','subst'],
+    steps: [
+      `\\(\\displaystyle\\lim_{x\\to 0}\\frac{\\sqrt{x+4}-2}{x}\\)`,
+      `\\(\\displaystyle\\lim_{x\\to 0}\\frac{(x+4)-4}{x(\\sqrt{x+4}+2)}=\\lim_{x\\to 0}\\frac{x}{x(\\sqrt{x+4}+2)}\\)`,
+      `\\(\\displaystyle\\lim_{x\\to 0}\\frac{\\cancel{x}}{\\cancel{x}(\\sqrt{x+4}+2)}=\\lim_{x\\to 0}\\frac{1}{\\sqrt{x+4}+2}\\)`,
+      `\\(\\displaystyle\\lim_{x\\to 0}\\frac{1}{\\sqrt{x+4}+2}=\\frac{1}{2+2}=\\) <span class="answer">\\(\\dfrac{1}{4}\\)</span>`,
+    ],
+    stepMsgs: ['', '🧴 유리화 성공! 켤레 √(x+4)+2 를 곱했더니 분자가 x로 정리됐어요.', '✂️ x≠0 이니 x를 약분! 이제 대입 가능한 꼴입니다.', '💉 대입하면 1/(2+2) = 1/4. 수술 성공!'],
+  },
+  {
+    name: '환자 C',
+    a: 1, limit: 3,
+    fn: x => (x*x*x-1)/(x-1),
+    hole: { x:1, y:3 },
+    correctTools: ['factor','cancel','subst'],
+    steps: [
+      `\\(\\displaystyle\\lim_{x\\to 1}\\frac{x^3-1}{x-1}\\)`,
+      `\\(\\displaystyle\\lim_{x\\to 1}\\frac{(x-1)(x^2+x+1)}{x-1}\\)`,
+      `\\(\\displaystyle\\lim_{x\\to 1}\\frac{\\cancel{(x-1)}(x^2+x+1)}{\\cancel{x-1}}=\\lim_{x\\to 1}(x^2+x+1)\\)`,
+      `\\(\\displaystyle\\lim_{x\\to 1}(x^2+x+1)=1+1+1=\\) <span class="answer">3</span>`,
+    ],
+    stepMsgs: ['', '🔪 삼차식도 인수분해! x³−1 = (x−1)(x²+x+1) 공식 기억나죠?', '✂️ (x−1) 약분 완료. 남은 건 x²+x+1.', '💉 대입하면 3. 세 번째 수술도 성공!'],
+  },
+];
+const tools = [
+  { key:'factor',   label:'🔪 인수분해' },
+  { key:'rational', label:'🧴 유리화' },
+  { key:'cancel',   label:'✂️ 약분' },
+  { key:'subst',    label:'💉 대입' },
+];
+let pIdx = 0;
+let pStep = [0,0,0]; // 환자별 진행 단계
+let surgeryView = null;
+function surgeryDefaultView(p){
+  const cx = p.a;
+  const cy = p.hole.y;
+  return { xMin: cx-3, xMax: cx+3, yMin: cy-3, yMax: cy+3 };
+}
+function resetSurgeryView(){ surgeryView = surgeryDefaultView(patients[pIdx]); redrawSurgery(); }
+
+function buildPatientTabs(){
+  const wrap = document.getElementById('patientTabs');
+  wrap.innerHTML = '';
+  patients.forEach((p,i)=>{
+    const b = document.createElement('button');
+    const done = pStep[i] >= 3;
+    b.className = 'ptab' + (i===pIdx?' active':'') + (done?' done':'');
+    b.textContent = (done?'✓ ':'') + p.name;
+    b.onclick = ()=>{ pIdx = i; surgeryView = surgeryDefaultView(patients[i]); buildPatientTabs(); renderSurgery(); };
+    wrap.appendChild(b);
+  });
+}
+function buildTools(){
+  const wrap = document.getElementById('toolRow');
+  wrap.innerHTML = '';
+  tools.forEach(t=>{
+    const b = document.createElement('button');
+    b.className = 'toolBtn pz-btn pz-btn-ghost';   // [2단계] 테마 버튼 모양
+    b.textContent = t.label;
+    b.id = 'tool_' + t.key;
+    b.onclick = ()=>useTool(t.key);
+    wrap.appendChild(b);
+  });
+}
+function useTool(key){
+  const p = patients[pIdx];
+  const step = pStep[pIdx];
+  const msg = document.getElementById('toolMsg');
+  if (step >= 3){
+    msg.className = 'toolMsg good';
+    msg.textContent = '이미 수술이 끝난 환자입니다. 다른 환자를 선택하세요!';
+    return;
+  }
+  if (key === p.correctTools[step]){
+    pStep[pIdx]++;
+    msg.className = 'toolMsg good';
+    msg.textContent = p.stepMsgs[pStep[pIdx]];
+    buildPatientTabs();
+    renderSurgery(false);
+    // [2단계] 축하: 세 환자를 모두 처음 완치한 순간 한 번
+    if (pStep.every(v => v >= 3) && window.PastelUI) PastelUI.celebrate('1-2-수술실', '🎉 세 환자 모두 수술 성공!');
+  } else {
+    msg.className = 'toolMsg badmsg';
+    const reasons = {
+      factor: '지금은 인수분해할 게 없어요.',
+      rational: '근호가 없는데 유리화라니요!',
+      cancel: '아직 약분할 공통인수가 안 보여요. 먼저 식을 변형해야죠.',
+      subst: '지금 대입하면 0/0! 환자가 위험합니다. 먼저 식을 변형하세요.',
+    };
+    // [수정] 이미 지난 단계의 도구를 다시 고르면 '근호가 없는데 유리화'(B는 근호가 남아 있음),
+    //        '아직 약분할 공통인수가 안 보여요'(이미 약분함) 같은 틀린 안내가 나오던 문제
+    const done = p.correctTools.slice(0, step);
+    const doneMsg = { factor:'이미 인수분해했어요. 다음 단계는?', rational:'이미 유리화했어요. 다음 단계는?', cancel:'이미 약분했어요. 이제 남은 단계는?' };
+    msg.textContent = '🚨 ' + (done.includes(key) && doneMsg[key] ? doneMsg[key] : (reasons[key] || '그 도구가 아니에요.'));
+    const box = document.getElementById('surgeryExpr');
+    box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+  }
+}
+function redoSurgery(){
+  pStep[pIdx] = 0;
+  surgeryView = surgeryDefaultView(patients[pIdx]);
+  buildPatientTabs();
+  renderSurgery();
+}
+function renderSurgery(resetMsg = true){
+  const p = patients[pIdx];
+  const step = pStep[pIdx];
+  document.getElementById('surgeryExpr').innerHTML = texHTML(p.steps[step]);
+  const badge = document.getElementById('diagBadge');
+  if (step >= 3){
+    badge.className = 'diagBadge healed';
+    badge.innerHTML = texHTML(`완치! \\(\\lim\\limits_{x\\to ${p.a}} f(x)=${p.limit === 0.25 ? '\\frac{1}{4}' : p.limit}\\)`);
+  } else if (step >= 1){
+    badge.className = 'diagBadge progress';   // [2단계] 진행 중은 버터(완치 민트와 구분)
+    badge.textContent = '수술 진행 중...';
+  } else {
+    badge.className = 'diagBadge';
+    badge.textContent = `진단: x=${p.a} 대입 시 0/0 꼴!`;
+  }
+  const trail = document.getElementById('stepTrail');
+  trail.innerHTML = [0,1,2].map(i=>`<div class="stepDot ${step>i?'on':''}"></div>`).join('');
+  if (resetMsg){
+    const msg = document.getElementById('toolMsg');
+    msg.className = 'toolMsg';
+    msg.textContent = step===0 ? '어떤 도구부터 쓸까요?' : p.stepMsgs[step];
+    if (step>0) msg.className = 'toolMsg good';
+  }
+  redrawSurgery();
+}
+function redrawSurgery(){
+  const p = patients[pIdx];
+  if (!surgeryView) surgeryView = surgeryDefaultView(p);
+  const step = pStep[pIdx];
+  const aStr = (Math.round(p.a*10)/10).toString();
+  const curves = [
+    { vline: p.a, color: C.ref, vlineWidth:2,
+      label: 'x='+aStr, bottomLabel: 'x→'+aStr, labelColor: C.refInk },
+    { fn: p.fn, color: C.f, width:3.5, breakOnJump:true, steps:1200,
+      marker: { x:p.hole.x, y:p.hole.y, open:true } },
+  ];
+  if (step >= 3){
+    curves.push({ fn: null, color: C.ok, marker:{ x:p.hole.x, y:p.hole.y, open:true } });
+  }
+  // 탭3: 극한값 수렴점 마커
+  const limitDots3 = [];
+  const limV = Math.round(p.limit * 1000) / 1000;
+  limitDots3.push({ x: p.hole.x, y: p.limit, color: C.ok, ink: C.okInk, label: `lim=${limV}`, pos: 'right' });
+  drawLineChart(document.getElementById('surgeryChart'),
+    surgeryView.xMin, surgeryView.xMax, surgeryView.yMin, surgeryView.yMax, curves, null, null, limitDots3);
+}
+
+// [수정] 창 크기·태블릿 회전 시 현재 탭 그래프를 다시 그림 (늘어난 그래프와 드래그 좌표 어긋남 방지)
+// [2단계] 글자 크기(가/가+/가++)를 바꿔도 테마가 resize 이벤트를 보내므로 같은 경로로 높이를 다시 맞춘다.
+let _rzTimer = null;
+window.addEventListener('resize', ()=>{
+  clearTimeout(_rzTimer);
+  _rzTimer = setTimeout(()=> redrawTab(currentTab), 120);
+});
+
+/* ==================== 초기화 ==================== */
+buildChips();
+// [2차 수정] 화면의 계수 이름은 m, n (x→a와 겹치지 않게). 내부 변수 vf.a=m, vf.b=n 은 그대로
+bindPair('sliderFA','numFA','a',-4,4);
+bindPair('sliderFB','numFB','b',-4,4);
+(function(){
+  const s = document.getElementById('sliderTA'), n = document.getElementById('numTA');
+  s.value = limitA; n.value = limitA;
+  s.addEventListener('input', ()=>{ limitA = Number(s.value); n.value = s.value; refreshVerify(); });
+  n.addEventListener('input', ()=>{
+    if (n.value.trim() === '') return; // [수정] 칸을 지우는 순간 a가 0으로 튀지 않게
+    let v = Number(n.value);
+    if (isNaN(v)) return;
+    v = Math.max(-2, Math.min(4, v));
+    limitA = v; s.value = v; refreshVerify();
+  });
+  n.addEventListener('change', ()=>{ n.value = limitA; }); // [수정] 범위 밖 입력은 실제 적용값으로 표시
+})();
+document.getElementById('sliderFA').value = vf.a; document.getElementById('numFA').value = vf.a;
+document.getElementById('sliderFB').value = vf.b; document.getElementById('numFB').value = vf.b;
+
+attachPanZoom('verifyChart', ()=>verifyView, (v)=>{ verifyView=v; }, refreshVerify);
+attachPanZoom('evidenceChart', ()=>evView, (v)=>{ evView=v; }, redrawEvidence);
+attachPanZoom('surgeryChart', ()=>surgeryView, (v)=>{ surgeryView=v; }, redrawSurgery);
+
+buildPatientTabs();
+buildTools();
+renderSurgery();
+refreshVerify();
+
+/* [2단계] 반응형: 1100px 이상은 CSS 그리드가 [조작 | 그래프(sticky)] 2단으로 바꾼다.
+   화면 폭이 바뀌면 그래프 높이를 다시 맞추고 다시 그린다. */
+(function responsiveLayout(){
+  const wrap = document.querySelector('.wrap');
+  let timer = null;
+  requestAnimationFrame(()=> redrawTab(currentTab));
+  if (typeof ResizeObserver === 'function'){
+    let lastW = 0;
+    new ResizeObserver(entries=>{
+      const w = entries[0].contentRect.width;
+      if (Math.abs(w - lastW) < 2) return;
+      lastW = w;
+      clearTimeout(timer); timer = setTimeout(()=> redrawTab(currentTab), 90);
+    }).observe(wrap);
+  }
+})();
+</script>
+</body>
+</html>
